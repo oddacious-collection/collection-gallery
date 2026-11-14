@@ -10,8 +10,10 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { ADMIN, expectSecurityHeaders } from './helpers.ts';
 
-const FORGED =
-  'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJlbWFpbCI6Im93bmVyQGV4YW1wbGUuY29tIiwiZXhwIjo5OTk5OTk5OTk5fQ.';
+// An unsigned (`alg: none`) token claiming to be the local test admin. Built at
+// runtime so secret scanners don't mistake a test fixture for a real JWT.
+const b64url = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+const FORGED = `${b64url({ alg: 'none', typ: 'JWT' })}.${b64url({ email: 'owner@example.com', exp: 9999999999 })}.`;
 
 const routes = ['/', '/robots.txt', '/no-such-page', '/_astro/', '/.well-known/x'];
 

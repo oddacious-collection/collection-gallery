@@ -1,0 +1,3 @@
+# Unsigned alg:none JWT used as a forged-token test fixture (not a secret).
+# Removed from the code in the following commit; ignored here for history scans.
+a648fa95e4257f14dd233efc550b80069a60a744:tests/e2e/admin.spec.ts:jwt:14
