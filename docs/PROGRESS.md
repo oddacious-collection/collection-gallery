@@ -1,6 +1,6 @@
 # Progress
 
-## Status: M0 Foundations — code complete locally; staging deploy waiting on owner tasks
+## Status: M0 Foundations — code done, CI green; staging deployed (not public); paused 2026-11-13 mid-Access setup
 
 ### Done (M0)
 
@@ -20,34 +20,48 @@
   - Lint, typecheck, unit tests, build, bundle check, `npm audit`, e2e, gitleaks.
   - Staging deploy + smoke test + ZAP baseline. These are gated on the `STAGING_ENABLED` repository variable until Cloudflare is set up.
   - CodeQL workflow. Dependabot (npm + Actions, 7-day cooldown).
-- **Docs**: threat model, ASVS 5.0 L2 checklist skeleton, token register, Access runbook; decisions D-20 to D-36 added to §13.
+- **Docs**: threat model, ASVS 5.0 L2 checklist skeleton, token register, Access runbook; decisions D-20 to D-37 added to §13.
+- **Staging resources** (created 2026-11-13): D1 `cg-staging` (migrated to `0000_init`), R2 `cg-media-public-staging` and `cg-media-private-staging`. Workers `cg-public-staging` and `cg-admin-staging` are deployed with `workers_dev` off (no public URL; both return 404).
+- **CI is green** on `main` (lint, typecheck, unit, build, e2e, gitleaks, CodeQL).
 
-### In progress
+### Resume point (where we paused)
 
-- Staging on Cloudflare: needs the owner tasks in "Next".
+Owner, in progress: Access setup per `docs/runbooks/access-setup.md`.
 
-### Next (owner tasks to finish M0)
+- [x] R2 enabled; `workers.dev` subdomain chosen (kept out of the repo, D-37)
+- [x] `wrangler login` on the owner's machine
+- [x] Both staging Workers protected with Worker-level Access, all traffic
+- [ ] **A.** Team-wide login methods: delete One-time PIN. Keep the team-wide Cloudflare method; just don't allow it on the apps.
+- [ ] **B.** On each staging app: login methods = GitHub only, Instant Auth on, session 24 h; replace the default "Cloudflare account" policy with Allow → Emails → owner's GitHub primary email; copy the **admin** app's AUD tag.
+- [ ] **C.** Service token `ci-staging` (1 year) and a Service Auth policy on the **public** app only.
+- [ ] **D.** `npx.cmd wrangler secret put ADMIN_EMAIL --name cg-admin-staging`
+- [ ] **E.** Cloudflare API token: Workers Scripts Edit + D1 Edit, this account, 1 year.
+- [ ] **F.** GitHub environment `staging` (deployment branches: `main` only), with secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`.
+- [ ] **G.** Owner sends Claude the team domain and the admin AUD tag.
 
-See the M0 summary for step-by-step instructions:
+Then Claude:
 
-1. Enable R2; send the `workers.dev` subdomain.
-2. `npx wrangler login`. Then Claude creates the staging D1 database and R2 buckets and does the first deploy (with `workers.dev` off).
-3. Access per `docs/runbooks/access-setup.md`; send the team domain and both AUD tags; set the `ADMIN_EMAIL` secret.
-4. CI deploy token and service token into the GitHub `staging` environment. Then Claude turns on `workers.dev` and `STAGING_ENABLED`.
-5. Branch protection on `main` once CI has run.
+1. Sets the GitHub `staging` variables (`CLOUDFLARE_ACCOUNT_ID`, `STAGING_PUBLIC_URL`, `STAGING_ADMIN_URL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD_ADMIN`), if the owner agrees.
+2. Sets `env.staging.workers_dev: true` in both `wrangler.jsonc` files, then pushes (after owner OK).
+3. Sets `STAGING_ENABLED=true`, then watches the deploy, smoke test and ZAP baseline.
+4. The owner checks sign-in in a private browser window (their GitHub account gets in; any other account is refused).
+5. Branch protection on `main` (owner, with Claude's exact settings).
+6. Writes the M0 review summary.
+
+Local commits not yet pushed: `Staging: set D1 database id` and this progress update.
 
 ### M0 exit criteria
 
-| Criterion                                       | State                                          |
-| ----------------------------------------------- | ---------------------------------------------- |
-| Hello-world public + admin on staging           | ⏳ blocked on owner tasks 1–4                  |
-| Admin rejects unauthenticated requests (TST-03) | ✅ locally (unit + e2e); ⏳ staging smoke test |
-| Headers test passes (TST-04)                    | ✅ locally; ⏳ staging smoke test              |
-| CI green                                        | ⏳ after first push                            |
+| Criterion                                       | State                                        |
+| ----------------------------------------------- | -------------------------------------------- |
+| Hello-world public + admin on staging           | ⏳ deployed but not public; Access steps A–G |
+| Admin rejects unauthenticated requests (TST-03) | ✅ locally + CI; ⏳ staging smoke test       |
+| Headers test passes (TST-04)                    | ✅ locally + CI; ⏳ staging smoke test       |
+| CI green                                        | ✅ (2026-11-13)                              |
 
 ### Deviations from the spec
 
-All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-36. The main ones:
+All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 
 - Staging runs on `workers.dev` until the domain exists (D-21).
 - Staging serves media from the public host (D-25).
