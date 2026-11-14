@@ -58,7 +58,7 @@
         {
           "binding": "DB",
           "database_name": "cg-staging",
-          "database_id": "STAGING_D1_ID",
+          "database_id": "f335c98e-69dd-4582-9559-dcb53587dfa4",
           "migrations_dir": "../../packages/core/migrations",
         },
       ],
