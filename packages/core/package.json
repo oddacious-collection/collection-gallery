@@ -1,0 +1,29 @@
+{
+  "name": "@cg/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./config": "./src/config.ts",
+    "./headers": "./src/headers.ts",
+    "./errors": "./src/errors.ts",
+    "./public": "./src/public/index.ts",
+    "./admin": "./src/admin/index.ts",
+    "./db/schema": "./src/db/schema.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.4",
+    "jose": "6.2.15",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.6.0",
+    "@cloudflare/workers-types": "5.20261107.1",
+    "drizzle-kit": "0.31.11",
+    "vitest": "5.1.0"
+  }
+}

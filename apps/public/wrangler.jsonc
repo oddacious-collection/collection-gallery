@@ -1,0 +1,57 @@
+// Public Worker (ARC-01). Serves the public site; in later milestones also
+// media, likes, view beacons and the contact form — never admin routes.
+//
+// Least privilege (ARC-03): this Worker gets the database and the PUBLIC media
+// bucket only. It has no binding to `media-private`.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "cg-public",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-28",
+  // Production stays off workers.dev; it will be served on {{DOMAIN}} (M7).
+  "workers_dev": false,
+  // Version/preview URLs are public by default — never enable them.
+  "preview_urls": false,
+  // PRV-04: invocation logs record request metadata; we only keep our own
+  // structured logs, which never contain IPs or PII.
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  "vars": {
+    "ENVIRONMENT": "local",
+    "PUBLIC_ORIGIN": "http://localhost:4321",
+    "OWNER_NAME": "Collection owner",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cg-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/core/migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-local" }],
+
+  "env": {
+    "staging": {
+      "name": "cg-public-staging",
+      // Off until Access protects this Worker; then switched on (see
+      // docs/runbooks/access-setup.md).
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "PUBLIC_ORIGIN": "https://cg-public-staging.SUBDOMAIN.workers.dev",
+        "OWNER_NAME": "Collection owner",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cg-staging",
+          "database_id": "STAGING_D1_ID",
+          "migrations_dir": "../../packages/core/migrations",
+        },
+      ],
+      "r2_buckets": [{ "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-staging" }],
+    },
+  },
+}

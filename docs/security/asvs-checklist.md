@@ -1,0 +1,28 @@
+# OWASP ASVS Level 2 checklist (SEC-01)
+
+Target: **ASVS 5.0.0, Level 2**. This is the M0 skeleton: one section per ASVS
+chapter, with what's in place so far. Individual requirement IDs (e.g.
+`V3.4.3`) are added as each milestone implements them. A full line-by-line
+review against the official requirement list happens in M7.
+
+Legend: ✅ implemented + tested · 🟡 partial · 🔜 planned (milestone) · N/A not applicable (with reason).
+
+| Chapter                                 | Status         | Implementation                                                                                                                                                                           | Tests                          |
+| --------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| V1 Encoding and Sanitization            | 🟡             | Astro auto-escaping; restricted Markdown + allowlist sanitiser in M1 (SEC-06)                                                                                                            | 🔜                             |
+| V2 Validation and Business Logic        | 🟡             | Zod at trust boundaries — env/config in M0 (SEC-05); requests/forms/imports from M1                                                                                                      | `config.test.ts`               |
+| V3 Web Frontend Security                | ✅ (M0 scope)  | Strict CSP header (no `unsafe-inline`/`eval`, `frame-ancestors 'none'`), HSTS, nosniff, COOP/CORP, Referrer-Policy, Permissions-Policy, Trusted Types on admin; no inline scripts/styles | `headers.test.ts`, e2e TST-04  |
+| V4 API and Web Service                  | 🟡             | Method allowlists; CSRF (Origin + Sec-Fetch-Site + custom header) on admin writes                                                                                                        | `admin-pipeline.test.ts`       |
+| V5 File Handling                        | 🔜 M1/M4       | Client re-encode, server magic bytes/size, attachment disposition for originals/documents                                                                                                | TST-05                         |
+| V6 Authentication                       | ✅ (delegated) | Cloudflare Access, GitHub IdP with passkey/2FA, OTP disabled (D-22, D-23)                                                                                                                | smoke test                     |
+| V7 Session Management                   | ✅ (delegated) | Access session ≤ 24 h, cookie scoped to admin host; no app sessions                                                                                                                      | smoke test                     |
+| V8 Authorization                        | ✅ (M0 scope)  | Single-owner model: JWT email must equal `ADMIN_EMAIL`; public Worker has no admin capabilities                                                                                          | `access.test.ts`, bundle check |
+| V9 Self-contained Tokens                | ✅             | Access JWT: RS256 only, JWKS from team domain, iss/aud/exp/nbf checked, fail closed                                                                                                      | `access.test.ts`               |
+| V10 OAuth and OIDC                      | N/A            | No OAuth client of our own; Access is the relying party                                                                                                                                  | —                              |
+| V11 Cryptography                        | 🔜 M6          | HMAC daily-secret dedupe for likes/contact (ANL-03); platform TLS                                                                                                                        | 🔜                             |
+| V12 Secure Communication                | ✅             | HTTPS only (Cloudflare edge), HSTS 2 years + includeSubDomains (preload in M7), `upgrade-insecure-requests`                                                                              | `headers.test.ts`              |
+| V13 Configuration                       | ✅ (M0 scope)  | Secrets only in Worker/GitHub secrets; exact-pinned deps; SHA-pinned Actions; least-privilege tokens (`tokens.md`); preview URLs off                                                     | CI, gitleaks                   |
+| V14 Data Protection                     | 🟡             | Server-side exclusion via public DAL; no-store on admin; privacy-leak suite in M1 (TST-02)                                                                                               | `public-dal.test.ts`           |
+| V15 Secure Coding and Architecture      | ✅ (M0 scope)  | Separate Workers, import boundary lint, bundle check, dependency policy                                                                                                                  | `check:bundle`, ESLint         |
+| V16 Security Logging and Error Handling | 🟡             | Generic errors; structured logs without IPs/PII; invocation logs off; audit log in M1                                                                                                    | pipeline tests                 |
+| V17 WebRTC                              | N/A            | No WebRTC                                                                                                                                                                                | —                              |

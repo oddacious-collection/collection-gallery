@@ -1,0 +1,71 @@
+// Admin Worker (ARC-01). Owner-only, behind Cloudflare Access (SEC-02) and
+// validating the Access JWT itself on every request (SEC-03).
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "cg-admin",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-28",
+  // Production stays off workers.dev; it will be served on admin.{{DOMAIN}} (M7).
+  "workers_dev": false,
+  // Version/preview URLs are public by default — never enable them.
+  "preview_urls": false,
+  // SEC-03 "every request": static assets (JS/CSS) also go through the Worker,
+  // so nothing is served without a valid Access JWT.
+  "assets": { "run_worker_first": true },
+  // PRV-04: keep only our own structured logs (no IPs or PII).
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  // Local values only. In deployed environments ADMIN_EMAIL is a Worker secret
+  // set by the owner (`wrangler secret put ADMIN_EMAIL --env staging`).
+  "vars": {
+    "ENVIRONMENT": "local",
+    "ADMIN_ORIGIN": "http://localhost:4322",
+    "PUBLIC_ORIGIN": "http://localhost:4321",
+    "OWNER_NAME": "Collection owner",
+    "ACCESS_TEAM_DOMAIN": "https://local-dev.cloudflareaccess.com",
+    "ACCESS_AUD": "0000000000000000000000000000000000000000000000000000000000000000",
+    "ADMIN_EMAIL": "owner@example.com",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cg-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/core/migrations",
+    },
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-local" },
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "cg-media-private-local" },
+  ],
+
+  "env": {
+    "staging": {
+      "name": "cg-admin-staging",
+      // Off until Access protects this Worker; then switched on (see
+      // docs/runbooks/access-setup.md).
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "ADMIN_ORIGIN": "https://cg-admin-staging.SUBDOMAIN.workers.dev",
+        "PUBLIC_ORIGIN": "https://cg-public-staging.SUBDOMAIN.workers.dev",
+        "OWNER_NAME": "Collection owner",
+        "ACCESS_TEAM_DOMAIN": "https://TEAM.cloudflareaccess.com",
+        "ACCESS_AUD": "ADMIN_STAGING_AUD",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cg-staging",
+          "database_id": "STAGING_D1_ID",
+          "migrations_dir": "../../packages/core/migrations",
+        },
+      ],
+      "r2_buckets": [
+        { "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-staging" },
+        { "binding": "MEDIA_PRIVATE", "bucket_name": "cg-media-private-staging" },
+      ],
+    },
+  },
+}

@@ -1,0 +1,8 @@
+// Test-only Worker config for running core tests inside workerd (TST-01).
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "cg-core-test",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "cg-test", "database_id": "test" }],
+}

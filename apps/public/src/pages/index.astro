@@ -1,0 +1,13 @@
+---
+import { env } from 'cloudflare:workers';
+import { getPublicSettings } from '@cg/core/public';
+import Base from '../layouts/Base.astro';
+
+const settings = await getPublicSettings(env.DB);
+const ownerName = settings.owner_name ?? env.OWNER_NAME;
+---
+
+<Base title="Collection Gallery">
+  <h1>Collection Gallery</h1>
+  <p>Hello, world. This will be {ownerName}'s collection of collections. Coming soon.</p>
+</Base>

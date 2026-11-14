@@ -1,0 +1,45 @@
+# SEC-10: keep npm dependencies and pinned Action SHAs current.
+# The cooldown matches .npmrc min-release-age: new releases wait 7 days.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    groups:
+      astro-cloudflare:
+        patterns: ['astro', '@astrojs/*', 'wrangler', '@cloudflare/*']
+      lint-test:
+        patterns:
+          [
+            'eslint',
+            '@eslint/*',
+            'typescript-eslint',
+            'eslint-plugin-*',
+            'prettier*',
+            'vitest',
+            '@playwright/*',
+            '@axe-core/*',
+            'globals',
+            '@types/*',
+          ]
+    ignore:
+      # Held below the latest major on purpose: typescript-eslint and
+      # @astrojs/check do not support TypeScript 7 yet (peer range < 6.1).
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
