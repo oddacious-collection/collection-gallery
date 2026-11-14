@@ -8,7 +8,7 @@
     "preview": "astro preview --port 4322",
     "types": "wrangler types --include-runtime=false --strict-vars=false",
     "typecheck": "astro check",
-    "deploy:staging": "wrangler deploy --config dist/server/wrangler.json",
+    "deploy:staging": "node ../../scripts/deploy-staging.ts admin",
     "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.jsonc --persist-to ../../.wrangler/state",
     "db:migrate:staging": "wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env staging"
   },

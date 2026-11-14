@@ -43,8 +43,22 @@ domain added later, so a forgotten route can never be public.
    - **Public staging only:** add a second policy: **Action Service Auth** ·
      Include → **Service Token** → `ci-staging` (see below). Never add this to
      an admin application.
-4. Copy the application's **Application Audience (AUD) Tag**. Not secret, but
-   needed in `apps/admin/wrangler.jsonc` (`ACCESS_AUD`) for admin apps.
+4. For admin apps, copy the **Application Audience (AUD) Tag**. It isn't secret,
+   but it isn't committed either (D-37). Store it as the GitHub `staging`
+   environment variable `ACCESS_AUD_ADMIN`, alongside `ACCESS_TEAM_DOMAIN`
+   (`https://<team>.cloudflareaccess.com`).
+
+## GitHub `staging` environment variables (not secrets)
+
+| Variable                | Value                                               |
+| ----------------------- | --------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                               |
+| `STAGING_PUBLIC_URL`    | `https://cg-public-staging.<subdomain>.workers.dev` |
+| `STAGING_ADMIN_URL`     | `https://cg-admin-staging.<subdomain>.workers.dev`  |
+| `ACCESS_TEAM_DOMAIN`    | `https://<team>.cloudflareaccess.com`               |
+| `ACCESS_AUD_ADMIN`      | AUD tag of the `cg-admin-staging` Access app        |
+
+Plus the repository variable `STAGING_ENABLED=true` once everything above is in place.
 
 ## Admin email secret
 

@@ -9,7 +9,7 @@
     "preview": "astro preview --port 4321",
     "types": "wrangler types --include-runtime=false --strict-vars=false",
     "typecheck": "astro check",
-    "deploy:staging": "wrangler deploy --config dist/server/wrangler.json"
+    "deploy:staging": "node ../../scripts/deploy-staging.ts public"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.4.6",

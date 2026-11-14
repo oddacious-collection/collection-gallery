@@ -40,7 +40,7 @@
       "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
       "vars": {
         "ENVIRONMENT": "staging",
-        "PUBLIC_ORIGIN": "https://cg-public-staging.SUBDOMAIN.workers.dev",
+        "PUBLIC_ORIGIN": "SET_AT_DEPLOY",
         "OWNER_NAME": "Collection owner",
       },
       "d1_databases": [

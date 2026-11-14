@@ -119,6 +119,12 @@ jobs:
         run: npm run db:migrate:staging
       - name: Deploy both Workers
         run: npm run deploy:staging
+        env:
+          # Kept out of the public repo; injected as Worker vars (D-37).
+          STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
+          STAGING_ADMIN_URL: ${{ vars.STAGING_ADMIN_URL }}
+          ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
+          ACCESS_AUD_ADMIN: ${{ vars.ACCESS_AUD_ADMIN }}
       - name: Smoke test staging
         run: npm run smoke:staging
         env:

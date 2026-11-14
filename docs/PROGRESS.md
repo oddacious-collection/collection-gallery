@@ -55,6 +55,7 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-36. The main ones:
 - `npm audit` is used instead of OSV-Scanner (D-36).
 
 ### Known advisories (accepted, dev-only, below the high/critical CI gate)
+
 - `esbuild <=0.24.2` (moderate, GHSA-67mh-4wv8-2f99): pulled in by `drizzle-kit`'s `@esbuild-kit/*`. It affects esbuild's dev server, which we never run. Re-check when drizzle-kit drops `@esbuild-kit`.
 - `minimatch` (moderate, GHSA-g3hv-75wg-m249): inside `typescript-eslint` lint tooling only. Dependabot will pick up the fix.
 

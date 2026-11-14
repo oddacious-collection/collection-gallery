@@ -48,11 +48,11 @@
       "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
       "vars": {
         "ENVIRONMENT": "staging",
-        "ADMIN_ORIGIN": "https://cg-admin-staging.SUBDOMAIN.workers.dev",
-        "PUBLIC_ORIGIN": "https://cg-public-staging.SUBDOMAIN.workers.dev",
+        "ADMIN_ORIGIN": "SET_AT_DEPLOY",
+        "PUBLIC_ORIGIN": "SET_AT_DEPLOY",
         "OWNER_NAME": "Collection owner",
-        "ACCESS_TEAM_DOMAIN": "https://TEAM.cloudflareaccess.com",
-        "ACCESS_AUD": "ADMIN_STAGING_AUD",
+        "ACCESS_TEAM_DOMAIN": "SET_AT_DEPLOY",
+        "ACCESS_AUD": "SET_AT_DEPLOY",
       },
       "d1_databases": [
         {

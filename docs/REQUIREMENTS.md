@@ -419,6 +419,7 @@ Context: the owner is **US-based**; the site is non-commercial and doesn't targe
 | D-34 | Workers-runtime unit tests use `@cloudflare/vitest-plugin`, the renamed successor of `@cloudflare/vitest-pool-workers` (TST-01). | The old package is deprecated. |
 | D-35 | `astro dev` for admin skips Access validation through a dev-only pipeline. It exists only behind the build-time `import.meta.env.DEV` constant, refuses unless `ENVIRONMENT=local`, and `npm run check:bundle` fails the build if its marker appears in any build output. | There's no Access in front of the local dev server. Built previews (and e2e tests) always validate. |
 | D-36 | Dependency scanning uses `npm audit --audit-level=high` (not OSV-Scanner); secret scanning uses gitleaks in CI plus GitHub secret scanning/push protection. | SEC-10 allows either; fewer tools. |
+| D-37 | Values that could identify the owner's Cloudflare account (the `workers.dev` subdomain, the Access team name, AUD tags) are **not committed**. They're stored as GitHub `staging` environment variables and injected at deploy time (`scripts/deploy-staging.ts`, `wrangler deploy --var`). Committed configs hold `SET_AT_DEPLOY` placeholders, which fail config validation (fail closed) if not overridden. | The repo is public (D-20); the subdomain is personal. |
 
 ---
 
