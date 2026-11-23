@@ -120,6 +120,12 @@ Two independent reviews (application code; CI, supply chain and GitHub settings)
   - **Fixes:** `scripts/deploy-staging.ts` now refuses unless the build is the staging config for `cg-<app>-staging`, strips `CLOUDFLARE_ENV`, passes `--name` explicitly, and then verifies (via a per-deploy message) that the expected Worker is running this deploy.
   - Also: Access doesn't issue a session cookie to service tokens, so the ZAP job now sends the service-token headers via ZAP replacer rules.
 
+- **2026-11-22: ZAP report possibly published unredacted.** The first version of the ZAP step redacted `report.md` in place with errors ignored (`|| true`), but ZAP writes the file as its container user, so the redaction almost certainly failed. Runs 45098773201 and 45104646227 then appended the report to their public job summaries.
+  - Those scans were fully authenticated, so the report lists alert names and public-staging URLs. The worst case is the staging public hostname (behind Access, and already inferable, see D-37). ZAP's summary report has no request headers, so no token.
+  - The hardened version (PR #6) withheld the report and failed instead, which is how this was found.
+  - **Fix:** `redact.py` now writes the redacted text to a new file and never edits ZAP's.
+  - Owner decision: delete those two runs' records.
+
 ### Deviations from the spec
 
 All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:

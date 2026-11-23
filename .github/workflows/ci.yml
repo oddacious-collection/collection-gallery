@@ -201,7 +201,9 @@ jobs:
           set -uo pipefail
           mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R 777 zap
           host="${TARGET#https://}"; host="${host%%/*}"
-          scope="^https://${host//./\\.}/.*"
+          # The staging host only, with or without a path: ZAP also requests the
+          # bare origin (no trailing slash).
+          scope="^https://${host//./\\.}(/.*)?$"
           rule() { # index, header, value
             printf -- '-config replacer.full_list(%s).%s ' \
               "$1" "description=$2" "$1" "enabled=true" "$1" "matchtype=REQ_HEADER" \
@@ -222,12 +224,18 @@ jobs:
             echo "ZAP scanned ${urls:-no} URLs: the service token did not get past Access" >&2
             status=1
           fi
+          # Any request that reached the Access login page went without the token.
+          if grep -q 'cloudflareaccess\.com' zap/console.txt zap/report.md; then
+            echo "ZAP reached the Access login page: some requests lacked the service token" >&2
+            status=1
+          fi
           # The step summary is public: publish the report only if every secret
-          # and account-identifying value was redacted from it (D-37).
+          # and account-identifying value was redacted from it (D-37). ZAP's files
+          # belong to its container user, so redact into a new file.
           if python3 .github/scripts/redact.py zap/report.md \
             "${CF_ACCESS_CLIENT_SECRET}" "${CF_ACCESS_CLIENT_ID}" \
-            "${TARGET}" "${ADMIN_URL}" "${TEAM_DOMAIN}"; then
-            cat zap/report.md >> "${GITHUB_STEP_SUMMARY}"
+            "${TARGET}" "${ADMIN_URL}" "${TEAM_DOMAIN}" > zap-report.md; then
+            cat zap-report.md >> "${GITHUB_STEP_SUMMARY}"
           else
             echo "ZAP report withheld: redaction failed." >> "${GITHUB_STEP_SUMMARY}"
             status=1
