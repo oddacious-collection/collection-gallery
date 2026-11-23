@@ -138,7 +138,9 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 ### Known advisories (accepted, dev-only, below the high/critical CI gate)
 
 - `esbuild <=0.24.2` (moderate, GHSA-67mh-4wv8-2f99): pulled in by `drizzle-kit`'s `@esbuild-kit/*`. It affects esbuild's dev server, which we never run. Re-check when drizzle-kit drops `@esbuild-kit`.
-- `minimatch` (moderate, GHSA-g3hv-75wg-m249): inside `typescript-eslint` lint tooling only. Dependabot will pick up the fix.
+- ~~`minimatch`~~ resolved 2026-11-22 by Dependabot PRs #7 and #11 (minimatch 11).
+
+**Dependency updates merged 2026-11-22** (each verified on staging: deploy, smoke, ZAP 0 FAIL): jose 6.2.17 (#3); astro 7.4.12, @astrojs/cloudflare 14.4.8, wrangler 4.162.0, @cloudflare/vitest-plugin 1.8.2, workers-types (#8); @types/node 26 (matches the Node 26 runtime), Playwright 1.65.1, eslint 10.15, prettier 3.10.1 (#7); typescript-eslint 8.73.0 (#11). `npm audit`: only the 4 moderate esbuild/drizzle-kit findings above remain.
 
 ### Dependencies (exact-pinned; one-line justification each)
 
