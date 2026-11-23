@@ -61,4 +61,34 @@ describe('public pipeline', () => {
     expect(res.status).toBe(500);
     expect(app).not.toHaveBeenCalled();
   });
+
+  describe('dev-server CSP relaxation', () => {
+    const dev = (url: string, env: Record<string, unknown>) =>
+      createPublicPipeline(async () => new Response('x'), { devServer: true })(
+        new Request(url),
+        env,
+        createExecutionContext(),
+      );
+    const local = publicEnv({ ENVIRONMENT: 'local', PUBLIC_ORIGIN: 'http://localhost:4321' });
+
+    it('applies on a loopback host in the local environment', async () => {
+      const res = await dev('http://localhost:4321/', local);
+      expect(res.headers.get('content-security-policy-report-only')).toContain(
+        "default-src 'none'",
+      );
+      expect(res.headers.get('content-security-policy')).toBeNull();
+    });
+
+    it('is ignored on a deployed host, even with local config', async () => {
+      const res = await dev('https://cg-public-staging.example.workers.dev/', local);
+      expect(res.headers.get('content-security-policy')).toContain("default-src 'none'");
+      expect(res.headers.get('content-security-policy-report-only')).toBeNull();
+    });
+
+    it('is ignored outside the local environment, even on loopback', async () => {
+      const res = await dev('http://localhost:4321/', publicEnv());
+      expect(res.headers.get('content-security-policy')).toContain("default-src 'none'");
+      expect(res.headers.get('content-security-policy-report-only')).toBeNull();
+    });
+  });
 });

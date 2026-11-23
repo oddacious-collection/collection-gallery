@@ -111,4 +111,17 @@ describe('admin pipeline', () => {
     expect(res.status).toBe(500);
     expect(await res.text()).not.toContain('secret');
   });
+
+  it('strips any Set-Cookie the app sets (SEC-08: only Access sets a cookie)', async () => {
+    const { handler } = pipeline(
+      vi.fn(async () => {
+        const r = new Response('x');
+        r.headers.append('Set-Cookie', 'session=1; Path=/');
+        return r;
+      }),
+    );
+    const res = await send(handler);
+    expect(res.status).toBe(200);
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
 });

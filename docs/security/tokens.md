@@ -19,6 +19,10 @@ Not credentials, but kept out of the public repo and logs (D-37): `CLOUDFLARE_AC
 `STAGING_PUBLIC_URL`, `STAGING_ADMIN_URL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD_ADMIN` are
 GitHub Environment `staging` secrets so Actions masks them.
 
+**Scope caveat:** `CLOUDFLARE_API_TOKEN` is account-wide; Cloudflare can't limit it to the staging Workers or database. Production must get separate credentials before it exists (D-39). In CI it is given only to the migrate and deploy steps, never to `npm ci` or the build.
+
+**Local machine:** the owner's `wrangler login` (OAuth) and GitHub CLI login are broad, long-lived credentials (Claude's sessions use them too). Run `npx.cmd wrangler logout` during long breaks.
+
 **Reminder:** renew both CI tokens before 2027-11-22. When they expire, the sites keep
 running; only CI deploys and the staging smoke test fail.
 

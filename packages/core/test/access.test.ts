@@ -51,6 +51,17 @@ describe('verifyAccessRequest', () => {
       'invalid',
     ],
     ['not yet valid', async () => issuer.sign(undefined, { notBefore: '5m' }), 'invalid'],
+    [
+      'older than 24 h (SEC-02), though not expired',
+      async () => issuer.sign(undefined, { issuedAt: Math.floor(Date.now() / 1000) - 25 * 3600 }),
+      'invalid',
+    ],
+    [
+      'team-wide org token, not an app token',
+      async () => issuer.sign({ email: ADMIN_EMAIL, type: 'org' }),
+      'invalid',
+    ],
+    ['no type claim', async () => issuer.sign({ email: ADMIN_EMAIL, type: undefined }), 'invalid'],
     ['no exp claim', async () => issuer.sign(undefined, { omitExp: true }), 'invalid'],
     ['wrong audience', async () => issuer.sign(undefined, { audience: 'b'.repeat(64) }), 'invalid'],
     [

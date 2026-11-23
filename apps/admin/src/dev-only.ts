@@ -5,10 +5,11 @@
  * `npm run check:bundle` fails if this marker appears in a build:
  * CG_DEV_ONLY_ACCESS_BYPASS
  *
- * As a second guard it refuses to serve unless the environment is `local`.
+ * As further guards it refuses to serve unless the environment is `local` AND
+ * the request is for a loopback host (a deployed Worker never is).
  */
 import { AdminConfigSchema, type FetchHandler } from '@cg/core/admin';
-import { loadConfig } from '@cg/core/config';
+import { isLocalHostname, loadConfig } from '@cg/core/config';
 import { errorResponse } from '@cg/core/errors';
 import { withSecurityHeaders } from '@cg/core/headers';
 
@@ -16,8 +17,8 @@ export function createDevPipeline<Env extends object>(app: FetchHandler<Env>): F
   return async (request, env, ctx) => {
     const opts = { host: 'admin', environment: 'local', devServer: true } as const;
     const config = loadConfig(AdminConfigSchema, env);
-    if (config.ENVIRONMENT !== 'local') {
-      console.error('CG_DEV_ONLY_ACCESS_BYPASS refused: environment is not local');
+    if (config.ENVIRONMENT !== 'local' || !isLocalHostname(new URL(request.url).hostname)) {
+      console.error('CG_DEV_ONLY_ACCESS_BYPASS refused: not a local environment and host');
       return withSecurityHeaders(errorResponse(403), opts);
     }
     return withSecurityHeaders(await app(request, env, ctx), opts);

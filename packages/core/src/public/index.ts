@@ -7,7 +7,13 @@
  */
 import { inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import { ConfigError, PublicConfigSchema, loadConfig, type PublicConfig } from '../config.ts';
+import {
+  ConfigError,
+  PublicConfigSchema,
+  isLocalHostname,
+  loadConfig,
+  type PublicConfig,
+} from '../config.ts';
 import { errorResponse, logEvent } from '../errors.ts';
 import { withSecurityHeaders } from '../headers.ts';
 import { settings } from '../db/schema.ts';
@@ -45,6 +51,11 @@ export type FetchHandler<Env> = (
 const ALLOWED_METHODS = new Set(['GET', 'HEAD']);
 
 export interface PublicPipelineOptions {
+  /**
+   * Running under `astro dev`. Only honoured when the environment is `local`
+   * AND the request is for a loopback host, so a development build that was
+   * deployed by mistake still sends the enforced CSP.
+   */
   devServer?: boolean;
 }
 
@@ -61,10 +72,14 @@ export function createPublicPipeline<Env extends object>(
       logEvent('error', 'config_invalid', { worker: 'public', fields });
       return withSecurityHeaders(errorResponse(500), { host: 'public', environment: 'production' });
     }
+    const devServer =
+      options.devServer === true &&
+      config.ENVIRONMENT === 'local' &&
+      isLocalHostname(new URL(request.url).hostname);
     const headerOpts = {
       host: 'public',
       environment: config.ENVIRONMENT,
-      ...(options.devServer ? { devServer: true } : {}),
+      ...(devServer ? { devServer: true } : {}),
     } as const;
 
     if (!ALLOWED_METHODS.has(request.method)) {

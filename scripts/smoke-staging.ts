@@ -59,7 +59,8 @@ for (const [label, url] of [
 // 2. The CI service token reaches the public staging site, with correct headers.
 const home = await get(`${publicUrl}/`, serviceToken);
 check(home.status === 200, `public / with service token → 200 (got ${home.status})`);
-check((await home.text()).includes('Collection Gallery'), 'public / renders the hello-world page');
+const homeHtml = await home.text();
+check(homeHtml.includes('Collection Gallery'), 'public / renders the hello-world page');
 for (const [name, value] of Object.entries(
   securityHeaders({ host: 'public', environment: 'staging' }),
 )) {
@@ -71,8 +72,31 @@ check(appCookies.length === 0, 'public / sets no cookies of its own (INV-3)');
 const robots = await get(`${publicUrl}/robots.txt`, serviceToken);
 check((await robots.text()).includes('Disallow: /'), 'staging robots.txt disallows crawling');
 
+// Static files are served without running the Worker, from the generated
+// `_headers`: check the deployed staging policy is on them too (TST-04).
+const css = /href="(\/_astro\/[^"]+\.css)"/.exec(homeHtml)?.[1];
+check(css !== undefined, 'public / links a built stylesheet');
+if (css !== undefined) {
+  const asset = await get(`${publicUrl}${css}`, serviceToken);
+  check(asset.status === 200, `public static asset → 200 (got ${asset.status})`);
+  for (const [name, value] of Object.entries(
+    securityHeaders({ host: 'public', environment: 'staging' }),
+  )) {
+    check(asset.headers.get(name) === value, `public static asset header ${name}`);
+  }
+  check(
+    (asset.headers.get('cache-control') ?? '').includes('immutable'),
+    'public static asset is cached immutably',
+  );
+}
+
+// The headers file configures the platform; it must not be served as a file.
+const headersFile = await get(`${publicUrl}/_headers`, serviceToken);
+check(headersFile.status === 404, `public /_headers is not served (got ${headersFile.status})`);
+
+// The pipeline itself answers 405 (a 403 would mean something else refused it).
 const post = await get(`${publicUrl}/`, serviceToken, 'POST');
-check(post.status === 405 || post.status === 403, `public POST rejected (got ${post.status})`);
+check(post.status === 405, `public POST → 405 (got ${post.status})`);
 
 // 3. The service token must NOT open admin (policy is the owner's email only).
 const adminWithToken = await get(`${adminUrl}/`, serviceToken);

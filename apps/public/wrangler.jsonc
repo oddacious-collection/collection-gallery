@@ -5,10 +5,14 @@
 // bucket only. It has no binding to `media-private`.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "cg-public",
+  // The top level is LOCAL DEVELOPMENT only (ENVIRONMENT=local, localhost
+  // origins). It deliberately does not use the production name, so a bare
+  // `wrangler deploy` can never overwrite production with local settings; it
+  // would create an unreachable "-local" Worker (no workers.dev, no routes).
+  // Staging and (from M7) production are explicit environments below.
+  "name": "cg-public-local",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-10-28",
-  // Production stays off workers.dev; it will be served on {{DOMAIN}} (M7).
   "workers_dev": false,
   // Version/preview URLs are public by default — never enable them.
   "preview_urls": false,

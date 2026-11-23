@@ -1,7 +1,7 @@
 /** SEC-05 — configuration is validated and fails closed. */
 import { describe, expect, it } from 'vitest';
 import { AdminConfigSchema } from '../src/admin/config.ts';
-import { ConfigError, PublicConfigSchema, loadConfig } from '../src/config.ts';
+import { ConfigError, PublicConfigSchema, isLocalHostname, loadConfig } from '../src/config.ts';
 import { adminEnv, publicEnv } from './helpers.ts';
 
 describe('config', () => {
@@ -44,5 +44,20 @@ describe('config', () => {
       publicEnv({ ENVIRONMENT: 'local', PUBLIC_ORIGIN: 'http://localhost:4321' }),
     );
     expect(config.ENVIRONMENT).toBe('local');
+  });
+
+  it('recognises only loopback hostnames as local', () => {
+    for (const h of ['localhost', 'app.localhost', '127.0.0.1', '[::1]']) {
+      expect(isLocalHostname(h), h).toBe(true);
+    }
+    for (const h of [
+      'example.test',
+      'localhost.example.com',
+      'cg-public-staging.x.workers.dev',
+      '127.0.0.2',
+      '',
+    ]) {
+      expect(isLocalHostname(h), h).toBe(false);
+    }
   });
 });

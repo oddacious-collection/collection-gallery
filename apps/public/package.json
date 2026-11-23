@@ -5,7 +5,7 @@
   "scripts": {
     "headers": "node ../../scripts/generate-headers.ts public",
     "dev": "npm run headers && astro dev --port 4321",
-    "build": "npm run headers && astro build",
+    "build": "node ../../scripts/assert-build-env.ts && npm run headers && astro build",
     "preview": "astro preview --port 4321",
     "types": "wrangler types --include-runtime=false --strict-vars=false",
     "typecheck": "astro check",
