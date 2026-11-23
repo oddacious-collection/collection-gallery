@@ -74,7 +74,11 @@ Then Claude:
 - review this summary;
 - renew the CI tokens before 2027-11-22;
 - triage the 3 open Dependabot PRs (they now merge through the PR workflow);
-- register the domain before M1 ends.
+- ~~register the domain before M1 ends~~ **done 2026-11-22** (O-04).
+  - Registered with Cloudflare Registrar.
+  - Verified from outside: DNSSEC active (DS published); CAA allows Let's Encrypt, Google Trust Services and SSL.com (plus Cloudflare's auto-added backup CAs); SPF `-all` and DMARC `p=reject` (no mail sent yet; M5 revisits).
+  - Registrar lock and auto-renew checked by the owner.
+  - The domain goes into config/env as `{{DOMAIN}}` when staging moves to it (first step of M1).
 
 **Carried into M1:** ZAP warnings (cache-control ×2, COEP); a token-expiry warning in CI; `backup:verify` (BAK-08).
 
