@@ -37,7 +37,11 @@ domain added later, so a forgotten route can never be public.
    Zero Trust → Access → Applications), then:
    - **Login methods:** untick everything except **GitHub**. Turn on **Instant Auth**.
    - **Session duration:** **24 hours** (or shorter).
-   - **Policies:** delete any default policy (e.g. "Cloudflare account").
+   - **Policies:** remove the default policy ("Cloudflare account members"):
+     **⋯ → Remove** on the app's Policies tab, then **Save** the app. Check the
+     list afterwards: on 2026-11-22 the default was still attached to the admin
+     app, and Access refused the owner's GitHub login ("That account does not
+     have access") until it was replaced.
      Add one policy: **Action Allow** · Include → **Emails** → the owner's
      GitHub primary email. Nothing else.
    - **Public staging only:** add a second policy: **Action Service Auth** ·
@@ -45,7 +49,7 @@ domain added later, so a forgotten route can never be public.
      an admin application.
 4. For admin apps, copy the **Application Audience (AUD) Tag**. It isn't secret,
    but it isn't committed either (D-37). Store it as the GitHub `staging`
-   environment variable `ACCESS_AUD_ADMIN`, alongside `ACCESS_TEAM_DOMAIN`
+   environment secret `ACCESS_AUD_ADMIN`, alongside `ACCESS_TEAM_DOMAIN`
    (`https://<team>.cloudflareaccess.com`).
    If the dashboard doesn't show the AUD (it didn't for Worker-level Access apps
    in 2026-11), read it from Access's login redirect: with `workers_dev` on,
