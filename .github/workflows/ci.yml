@@ -201,7 +201,9 @@ jobs:
           set -uo pipefail
           mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R 777 zap
           host="${TARGET#https://}"; host="${host%%/*}"
-          scope="^https://${host//./\\.}/.*"
+          # The staging host only, with or without a path: ZAP also requests the
+          # bare origin (no trailing slash).
+          scope="^https://${host//./\\.}(/.*)?$"
           rule() { # index, header, value
             printf -- '-config replacer.full_list(%s).%s ' \
               "$1" "description=$2" "$1" "enabled=true" "$1" "matchtype=REQ_HEADER" \
@@ -220,6 +222,11 @@ jobs:
           urls="$(sed -nE 's/^Total of ([0-9]+) URLs.*/\1/p' zap/console.txt | tail -n 1)"
           if [ -z "${urls}" ] || [ "${urls}" -lt 3 ]; then
             echo "ZAP scanned ${urls:-no} URLs: the service token did not get past Access" >&2
+            status=1
+          fi
+          # Any request that reached the Access login page went without the token.
+          if grep -q 'cloudflareaccess\.com' zap/console.txt zap/report.md; then
+            echo "ZAP reached the Access login page: some requests lacked the service token" >&2
             status=1
           fi
           # The step summary is public: publish the report only if every secret
