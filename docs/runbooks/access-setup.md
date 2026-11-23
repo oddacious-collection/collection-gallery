@@ -47,6 +47,10 @@ domain added later, so a forgotten route can never be public.
    but it isn't committed either (D-37). Store it as the GitHub `staging`
    environment variable `ACCESS_AUD_ADMIN`, alongside `ACCESS_TEAM_DOMAIN`
    (`https://<team>.cloudflareaccess.com`).
+   If the dashboard doesn't show the AUD (it didn't for Worker-level Access apps
+   in 2026-11), read it from Access's login redirect: with `workers_dev` on,
+   `curl -sI https://<worker>.<subdomain>.workers.dev/` returns a `Location`
+   whose `kid=` parameter is the AUD.
 
 ## GitHub `staging` environment secrets (account-identifying values)
 

@@ -1,6 +1,6 @@
 # Progress
 
-## Status: M0 Foundations — code done, CI green; staging deployed (not public); paused 2026-11-13 mid-Access setup
+## Status: M0 Foundations — code done, CI green; Access setup done (2026-11-22); first CI staging deploy pending
 
 ### Done (M0)
 
@@ -26,29 +26,27 @@
 
 ### Resume point (where we paused)
 
-Owner, in progress: Access setup per `docs/runbooks/access-setup.md`.
+Owner: Access setup per `docs/runbooks/access-setup.md` — done 2026-11-22.
 
 - [x] R2 enabled; `workers.dev` subdomain chosen (kept out of the repo, D-37)
 - [x] `wrangler login` on the owner's machine
 - [x] Both staging Workers protected with Worker-level Access, all traffic
-- [ ] **A.** Team-wide login methods: delete One-time PIN. Keep the team-wide Cloudflare method; just don't allow it on the apps.
-- [ ] **B.** On each staging app: login methods = GitHub only, Instant Auth on, session 24 h; replace the default "Cloudflare account" policy with Allow → Emails → owner's GitHub primary email; copy the **admin** app's AUD tag.
-- [ ] **C.** Service token `ci-staging` (1 year) and a Service Auth policy on the **public** app only.
-- [ ] **D.** `npx.cmd wrangler secret put ADMIN_EMAIL --name cg-admin-staging`
-- [ ] **E.** Cloudflare API token: Workers Scripts Edit + D1 Edit, this account, 1 year.
-- [ ] **F.** GitHub environment `staging` (deployment branches: `main` only), with secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`.
-- [ ] **G.** Owner sends Claude the team domain and the admin AUD tag.
+- [x] **A.** Team-wide login methods: delete One-time PIN. Keep the team-wide Cloudflare method; just don't allow it on the apps.
+- [x] **B.** On each staging app: login methods = GitHub only, Instant Auth on, session 24 h; replace the default "Cloudflare account" policy with Allow → Emails → owner's GitHub primary email; copy the **admin** app's AUD tag.
+- [x] **C.** Service token `ci-staging` (1 year) and a Service Auth policy on the **public** app only.
+- [x] **D.** `npx.cmd wrangler secret put ADMIN_EMAIL --name cg-admin-staging`
+- [x] **E.** Cloudflare API token (account-owned `ci-staging-deploy`): Workers Scripts Edit + D1 Edit, expires 2027-11-22.
+- [x] **F.** GitHub environment `staging` (deployment branches: `main` only), with secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`.
+- [x] **G.** Team domain and admin AUD collected (the AUD was read from Access's login redirect: the dashboard didn't show it for Worker-level Access apps).
 
 Then Claude:
 
-1. Sets the GitHub `staging` variables (`CLOUDFLARE_ACCOUNT_ID`, `STAGING_PUBLIC_URL`, `STAGING_ADMIN_URL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD_ADMIN`), if the owner agrees.
-2. Sets `env.staging.workers_dev: true` in both `wrangler.jsonc` files, then pushes (after owner OK).
-3. Sets `STAGING_ENABLED=true`, then watches the deploy, smoke test and ZAP baseline.
-4. The owner checks sign-in in a private browser window (their GitHub account gets in; any other account is refused).
-5. Branch protection on `main` (owner, with Claude's exact settings).
-6. Writes the M0 review summary.
-
-Local commits not yet pushed: `Staging: set D1 database id` and this progress update.
+1. [x] Staging values stored as GitHub `staging` **secrets** (not variables: Actions logs are public, D-37), with log masking in the workflow.
+2. [x] `env.staging.workers_dev: true` in both configs. Both `workers.dev` URLs verified to redirect signed-out visitors to Access (2026-11-22).
+3. [ ] Push (after owner OK), set `STAGING_ENABLED=true`, watch the deploy, smoke test and ZAP baseline.
+4. [ ] The owner checks sign-in in a private browser window (their GitHub account gets in; any other account is refused).
+5. [ ] Branch protection on `main` (owner, with Claude's exact settings).
+6. [ ] M0 review summary.
 
 ### M0 exit criteria
 
