@@ -41,9 +41,10 @@
   "env": {
     "staging": {
       "name": "cg-admin-staging",
-      // Off until Access protects this Worker; then switched on (see
-      // docs/runbooks/access-setup.md).
-      "workers_dev": false,
+      // Staging runs on workers.dev until the domain exists (D-21). Safe only
+      // because Worker-level Access (all traffic) protects this Worker; never
+      // turn that off (docs/runbooks/access-setup.md).
+      "workers_dev": true,
       "preview_urls": false,
       "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
       "vars": {

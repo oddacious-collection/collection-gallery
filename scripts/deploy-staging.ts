@@ -6,7 +6,8 @@
  * Usage (after `CLOUDFLARE_ENV=staging npm run build`):
  *   node scripts/deploy-staging.ts <public|admin> [--dry-run]
  *
- * Required env (GitHub `staging` environment variables in CI):
+ * Required env (GitHub `staging` environment secrets in CI, so they're masked
+ * in the public logs):
  *   STAGING_PUBLIC_URL   e.g. https://cg-public-staging.<subdomain>.workers.dev
  *   STAGING_ADMIN_URL    e.g. https://cg-admin-staging.<subdomain>.workers.dev
  *   ACCESS_TEAM_DOMAIN   e.g. https://<team>.cloudflareaccess.com   (admin only)

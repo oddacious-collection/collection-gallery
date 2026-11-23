@@ -48,9 +48,13 @@ domain added later, so a forgotten route can never be public.
    environment variable `ACCESS_AUD_ADMIN`, alongside `ACCESS_TEAM_DOMAIN`
    (`https://<team>.cloudflareaccess.com`).
 
-## GitHub `staging` environment variables (not secrets)
+## GitHub `staging` environment secrets (account-identifying values)
 
-| Variable                | Value                                               |
+None of these are credentials, but the repo and its Actions logs are public.
+Stored as **secrets** so GitHub masks them in logs; the workflow also masks the
+bare hostname, `workers.dev` subdomain and team name (D-37).
+
+| Secret                  | Value                                               |
 | ----------------------- | --------------------------------------------------- |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                               |
 | `STAGING_PUBLIC_URL`    | `https://cg-public-staging.<subdomain>.workers.dev` |

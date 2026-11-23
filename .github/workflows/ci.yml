@@ -102,9 +102,25 @@ jobs:
       contents: read
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_ENV: staging
     steps:
+      # D-37: account-identifying values are environment *secrets*, so GitHub
+      # masks them in these public logs. Tools also print shorter forms of them
+      # (the bare hostname, the workers.dev subdomain, the Access team name), so
+      # mask those too. Masks are per job: keep this the first step.
+      - name: Mask account-identifying values in logs (D-37)
+        env:
+          PUBLIC_URL: ${{ secrets.STAGING_PUBLIC_URL }}
+          TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
+        run: |
+          set -euo pipefail
+          host="${PUBLIC_URL#https://}"; host="${host%%/*}"
+          sub="${host#*.}"; sub="${sub%%.*}"
+          team="${TEAM_DOMAIN#https://}"; team="${team%%.*}"
+          for v in "${host}" "${sub}" "${team}"; do
+            if [ -n "${v}" ]; then echo "::add-mask::${v}"; fi
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -121,15 +137,15 @@ jobs:
         run: npm run deploy:staging
         env:
           # Kept out of the public repo; injected as Worker vars (D-37).
-          STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
-          STAGING_ADMIN_URL: ${{ vars.STAGING_ADMIN_URL }}
-          ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
-          ACCESS_AUD_ADMIN: ${{ vars.ACCESS_AUD_ADMIN }}
+          STAGING_PUBLIC_URL: ${{ secrets.STAGING_PUBLIC_URL }}
+          STAGING_ADMIN_URL: ${{ secrets.STAGING_ADMIN_URL }}
+          ACCESS_TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
+          ACCESS_AUD_ADMIN: ${{ secrets.ACCESS_AUD_ADMIN }}
       - name: Smoke test staging
         run: npm run smoke:staging
         env:
-          STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
-          STAGING_ADMIN_URL: ${{ vars.STAGING_ADMIN_URL }}
+          STAGING_PUBLIC_URL: ${{ secrets.STAGING_PUBLIC_URL }}
+          STAGING_ADMIN_URL: ${{ secrets.STAGING_ADMIN_URL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
@@ -141,8 +157,24 @@ jobs:
     permissions:
       contents: read
     env:
-      TARGET: ${{ vars.STAGING_PUBLIC_URL }}
+      TARGET: ${{ secrets.STAGING_PUBLIC_URL }}
     steps:
+      # D-37: account-identifying values are environment *secrets*, so GitHub
+      # masks them in these public logs. Tools also print shorter forms of them
+      # (the bare hostname, the workers.dev subdomain, the Access team name), so
+      # mask those too. Masks are per job: keep this the first step.
+      - name: Mask account-identifying values in logs (D-37)
+        env:
+          PUBLIC_URL: ${{ secrets.STAGING_PUBLIC_URL }}
+          TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
+        run: |
+          set -euo pipefail
+          host="${PUBLIC_URL#https://}"; host="${host%%/*}"
+          sub="${host#*.}"; sub="${sub%%.*}"
+          team="${TEAM_DOMAIN#https://}"; team="${team%%.*}"
+          for v in "${host}" "${sub}" "${team}"; do
+            if [ -n "${v}" ]; then echo "::add-mask::${v}"; fi
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -173,7 +205,10 @@ jobs:
             ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af \
             zap-baseline.py -t "${TARGET}" -c rules.tsv -w report.md -I
           status=$?
-          # Never publish the session token, even if ZAP quoted it as evidence.
+          # Never publish the session token, even if ZAP quoted it as evidence,
+          # nor the staging hostname (D-37): the summary is public.
           sed -E -i 's/CF_Authorization=[^;[:space:]]*/CF_Authorization=REDACTED/g' zap/report.md || true
+          host="${TARGET#https://}"; host="${host%%/*}"
+          sed -i "s#${host}#staging-public-host#g" zap/report.md || true
           cat zap/report.md >> "${GITHUB_STEP_SUMMARY}" || true
           exit "${status}"
