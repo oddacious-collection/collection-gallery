@@ -1,6 +1,6 @@
 # Progress
 
-## Status: M0 Foundations — code done, CI green; Access setup done (2026-11-22); first CI staging deploy pending
+## Status: M0 Foundations — staging deploys from CI (2026-11-22); owner sign-in check, branch protection and review left
 
 ### Done (M0)
 
@@ -43,19 +43,19 @@ Then Claude:
 
 1. [x] Staging values stored as GitHub `staging` **secrets** (not variables: Actions logs are public, D-37), with log masking in the workflow.
 2. [x] `env.staging.workers_dev: true` in both configs. Both `workers.dev` URLs verified to redirect signed-out visitors to Access (2026-11-22).
-3. [ ] Push (after owner OK), set `STAGING_ENABLED=true`, watch the deploy, smoke test and ZAP baseline. First attempt 2026-11-22 found two bugs (see Incidents); fixed, awaiting re-run.
+3. [x] Push, `STAGING_ENABLED=true`, first CI staging deploy. The first attempt (2026-11-22) found two bugs (see Incidents). After the fix, run 45098773201 was all green: the deploy was verified on `cg-public-staging` / `cg-admin-staging`, the smoke test passed, and the ZAP baseline had 0 FAIL, 65 PASS and 3 WARN (cache-control ×2 rules, COEP missing; triage in M1). No account values appear in the logs.
 4. [ ] The owner checks sign-in in a private browser window (their GitHub account gets in; any other account is refused).
 5. [ ] Branch protection on `main` (owner, with Claude's exact settings).
 6. [ ] M0 review summary.
 
 ### M0 exit criteria
 
-| Criterion                                       | State                                        |
-| ----------------------------------------------- | -------------------------------------------- |
-| Hello-world public + admin on staging           | ⏳ deployed but not public; Access steps A–G |
-| Admin rejects unauthenticated requests (TST-03) | ✅ locally + CI; ⏳ staging smoke test       |
-| Headers test passes (TST-04)                    | ✅ locally + CI; ⏳ staging smoke test       |
-| CI green                                        | ✅ (2026-11-13)                              |
+| Criterion                                       | State                                                             |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| Hello-world public + admin on staging           | ✅ CI-deployed behind Access (2026-11-22); ⏳ owner sign-in check |
+| Admin rejects unauthenticated requests (TST-03) | ✅ locally + CI + staging smoke test                              |
+| Headers test passes (TST-04)                    | ✅ locally + CI + staging smoke test                              |
+| CI green                                        | ✅ (2026-11-22, incl. staging deploy + ZAP)                       |
 
 ### Incidents
 
