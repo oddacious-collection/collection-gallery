@@ -1,6 +1,6 @@
 # Progress
 
-## Status: M0 Foundations — staging deploys from CI (2026-11-22); owner sign-in check, branch protection and review left
+## Status: M0 Foundations — exit criteria met 2026-11-22; awaiting owner review
 
 ### Done (M0)
 
@@ -44,15 +44,45 @@ Then Claude:
 1. [x] Staging values stored as GitHub `staging` **secrets** (not variables: Actions logs are public, D-37), with log masking in the workflow.
 2. [x] `env.staging.workers_dev: true` in both configs. Both `workers.dev` URLs verified to redirect signed-out visitors to Access (2026-11-22).
 3. [x] Push, `STAGING_ENABLED=true`, first CI staging deploy. The first attempt (2026-11-22) found two bugs (see Incidents). After the fix, run 45098773201 was all green: the deploy was verified on `cg-public-staging` / `cg-admin-staging`, the smoke test passed, and the ZAP baseline had 0 FAIL, 65 PASS and 3 WARN (cache-control ×2 rules, COEP missing; triage in M1). No account values appear in the logs.
-4. [ ] The owner checks sign-in in a private browser window (their GitHub account gets in; any other account is refused).
-5. [ ] Branch protection on `main` (owner, with Claude's exact settings).
-6. [ ] M0 review summary.
+4. [x] Owner sign-in check (2026-11-22). The owner's GitHub login reaches the admin and public hello-world pages. Two things were found on the way:
+   - The admin app still had Cloudflare's default "Cloudflare account members" policy instead of the owner's email (fixed; runbook updated).
+   - GitHub's passkey step 404s in the owner's private browser window. That's a GitHub/browser issue (nothing reached our Workers); a normal window works.
+5. [x] Branch protection (2026-11-22): repository ruleset `main` (D-38). Squash merges only; branches deleted after merge.
+6. [x] M0 review summary (below).
+
+### M0 review summary
+
+**Built:** everything listed under "Done (M0)": the two-Worker scaffold, the shared core, Access JWT validation, security headers, tests and CI/CD.
+
+**Exit criteria:** all met:
+
+- hello-world public and admin pages on staging, behind Access;
+- TST-03 and TST-04 pass locally, in CI and against real staging;
+- CI is green, including the staging deploy, smoke test and ZAP baseline (0 FAIL).
+
+**Deviations:** D-20 to D-38 in §13. The notable ones are:
+
+- staging on `workers.dev` (D-21);
+- account-identifying values kept out of the repo and out of the public logs (D-37);
+- `npm audit` instead of OSV-Scanner (D-36);
+- PRs with 0 required approvals (D-38).
+
+**Incident:** the 2026-11-22 wrong-Worker deploy (below), now prevented by a guard and a post-deploy check.
+
+**Owner follow-ups:**
+
+- review this summary;
+- renew the CI tokens before 2027-11-22;
+- triage the 3 open Dependabot PRs (they now merge through the PR workflow);
+- register the domain before M1 ends.
+
+**Carried into M1:** ZAP warnings (cache-control ×2, COEP); a token-expiry warning in CI; `backup:verify` (BAK-08).
 
 ### M0 exit criteria
 
 | Criterion                                       | State                                                             |
 | ----------------------------------------------- | ----------------------------------------------------------------- |
-| Hello-world public + admin on staging           | ✅ CI-deployed behind Access (2026-11-22); ⏳ owner sign-in check |
+| Hello-world public + admin on staging           | ✅ CI-deployed behind Access; owner sign-in verified (2026-11-22) |
 | Admin rejects unauthenticated requests (TST-03) | ✅ locally + CI + staging smoke test                              |
 | Headers test passes (TST-04)                    | ✅ locally + CI + staging smoke test                              |
 | CI green                                        | ✅ (2026-11-22, incl. staging deploy + ZAP)                       |
