@@ -28,6 +28,20 @@ export const Origin = z.string().refine((v) => parseOrigin(v) !== null, {
 export const OwnerName = z.string().trim().min(1).max(100);
 
 /**
+ * True only for loopback hostnames. Used to confine dev-server behaviour to a
+ * developer's machine even if a development build were ever deployed: a
+ * deployed Worker is never reached on these names. Takes `URL.hostname`.
+ */
+export function isLocalHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]'
+  );
+}
+
+/**
  * Deployed environments must use HTTPS, non-local origins; the local
  * environment must use local origins. This stops a deployed Worker from being
  * mislabelled "local" (or vice versa).

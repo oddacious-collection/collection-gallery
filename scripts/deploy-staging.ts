@@ -17,6 +17,7 @@ import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { staticHeadersFile } from '../packages/core/src/headers.ts';
 
 const app = process.argv[2];
 if (app !== 'public' && app !== 'admin') {
@@ -56,6 +57,27 @@ if (built.name !== expectedName) {
   );
 }
 if (built.preview_urls !== false) fail('preview_urls must be false');
+
+// The public Worker serves static files without running, using the generated
+// `_headers`: it must be the staging policy, not a local one (no
+// upgrade-insecure-requests) or a stale file.
+if (app === 'public') {
+  const headersFile = readFileSync(path.join(cwd, 'dist/client/_headers'), 'utf8');
+  if (headersFile !== staticHeadersFile({ host: 'public', environment: 'staging' })) {
+    fail('dist/client/_headers is not the staging header policy');
+  }
+}
+
+// Deploy only output that passed the bundle guard (no admin code in public,
+// no dev bypass in admin, no inline scripts or styles).
+const bundle = spawnSync(
+  process.execPath,
+  [path.join(import.meta.dirname, 'check-public-bundle.ts')],
+  {
+    stdio: 'inherit',
+  },
+);
+if (bundle.status !== 0) fail('bundle check failed');
 
 const vars: Record<string, string> =
   app === 'public'

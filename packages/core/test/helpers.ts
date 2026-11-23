@@ -27,6 +27,8 @@ export interface SignOptions {
   audience?: string;
   expiresIn?: string | number;
   notBefore?: string | number;
+  /** `iat` in seconds since the epoch (default: now). */
+  issuedAt?: number;
   key?: CryptoKey;
   omitExp?: boolean;
 }
@@ -44,7 +46,7 @@ export async function createIssuer(kid = 'test-key-1'): Promise<TestIssuer> {
         .setProtectedHeader({ alg: 'RS256', kid })
         .setIssuer(opts.issuer ?? TEAM_DOMAIN)
         .setAudience(opts.audience ?? AUD)
-        .setIssuedAt()
+        .setIssuedAt(opts.issuedAt)
         .setSubject('user-123');
       if (!opts.omitExp) jwt = jwt.setExpirationTime(opts.expiresIn ?? '10m');
       if (opts.notBefore !== undefined) jwt = jwt.setNotBefore(opts.notBefore);

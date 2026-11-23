@@ -16,6 +16,7 @@ concurrency:
 
 env:
   ASTRO_TELEMETRY_DISABLED: '1'
+  WRANGLER_SEND_METRICS: 'false'
   FORCE_COLOR: '0'
 
 jobs:
@@ -100,9 +101,10 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
+    # The Cloudflare API token is NOT set job-wide: only the two steps that
+    # talk to Cloudflare get it, so `npm ci` and the build (third-party code)
+    # never see it.
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_ENV: staging
     steps:
       # D-37: account-identifying values are environment *secrets*, so GitHub
@@ -131,11 +133,19 @@ jobs:
       - run: npm ci
       - name: Build for staging
         run: npm run build
+      # The exact output about to be deployed (deploy-staging.ts checks again).
+      - name: Bundle check on the staging build
+        run: npm run check:bundle
       - name: Apply D1 migrations (forward-only, OPS-03)
         run: npm run db:migrate:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy both Workers
         run: npm run deploy:staging
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # Kept out of the public repo; injected as Worker vars (D-37).
           STAGING_PUBLIC_URL: ${{ secrets.STAGING_PUBLIC_URL }}
           STAGING_ADMIN_URL: ${{ secrets.STAGING_ADMIN_URL }}
@@ -179,33 +189,47 @@ jobs:
         with:
           persist-credentials: false
       # Access doesn't issue a session cookie to service tokens, so ZAP sends
-      # the two service-token headers on every request (replacer rules).
+      # the two service-token headers itself (replacer rules), scoped to the
+      # staging host so they're never sent anywhere else.
       - name: Run ZAP baseline (passive) scan
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          ADMIN_URL: ${{ secrets.STAGING_ADMIN_URL }}
+          TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
         run: |
           set -uo pipefail
           mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R 777 zap
+          host="${TARGET#https://}"; host="${host%%/*}"
+          scope="^https://${host//./\\.}/.*"
           rule() { # index, header, value
-            printf -- '-config replacer.full_list(%s).%s '               "$1" "description=$2" "$1" "enabled=true" "$1" "matchtype=REQ_HEADER"               "$1" "matchstr=$2" "$1" "regex=false" "$1" "replacement=$3"
+            printf -- '-config replacer.full_list(%s).%s ' \
+              "$1" "description=$2" "$1" "enabled=true" "$1" "matchtype=REQ_HEADER" \
+              "$1" "matchstr=$2" "$1" "regex=false" "$1" "replacement=$3" \
+              "$1" "url=${scope}"
           }
           zopts="$(rule 0 CF-Access-Client-Id "${CF_ACCESS_CLIENT_ID}")$(rule 1 CF-Access-Client-Secret "${CF_ACCESS_CLIENT_SECRET}")"
           zopts="${zopts% }"
-          docker run --rm -v "${PWD}/zap:/zap/wrk:rw"             ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af             zap-baseline.py -t "${TARGET}" -c rules.tsv -w report.md -I -z "${zopts}"
-          status=$?
-          # The step summary is public: never publish the service token (even if
-          # ZAP quoted a request as evidence) or the staging hostname (D-37).
-          host="${TARGET#https://}"; host="${host%%/*}"
-          python3 - "${CF_ACCESS_CLIENT_ID}" "${CF_ACCESS_CLIENT_SECRET}" "${host}" <<'PY' || true
-          import sys
-          p = "zap/report.md"
-          s = open(p, encoding="utf-8").read()
-          cid, secret, host = sys.argv[1:4]
-          for value, label in ((secret, "REDACTED"), (cid, "REDACTED"), (host, "staging-public-host")):
-              if value:
-                  s = s.replace(value, label)
-          open(p, "w", encoding="utf-8").write(s)
-          PY
-          cat zap/report.md >> "${GITHUB_STEP_SUMMARY}" || true
+          docker run --rm -v "${PWD}/zap:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af \
+            zap-baseline.py -t "${TARGET}" -c rules.tsv -w report.md -I -z "${zopts}" \
+            | tee zap/console.txt
+          status=${PIPESTATUS[0]}
+          # Prove the scan got past Access. Unauthenticated, ZAP only sees the
+          # redirect to the login page and would "pass" without testing anything.
+          urls="$(sed -nE 's/^Total of ([0-9]+) URLs.*/\1/p' zap/console.txt | tail -n 1)"
+          if [ -z "${urls}" ] || [ "${urls}" -lt 3 ]; then
+            echo "ZAP scanned ${urls:-no} URLs: the service token did not get past Access" >&2
+            status=1
+          fi
+          # The step summary is public: publish the report only if every secret
+          # and account-identifying value was redacted from it (D-37).
+          if python3 .github/scripts/redact.py zap/report.md \
+            "${CF_ACCESS_CLIENT_SECRET}" "${CF_ACCESS_CLIENT_ID}" \
+            "${TARGET}" "${ADMIN_URL}" "${TEAM_DOMAIN}"; then
+            cat zap/report.md >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "ZAP report withheld: redaction failed." >> "${GITHUB_STEP_SUMMARY}"
+            status=1
+          fi
           exit "${status}"

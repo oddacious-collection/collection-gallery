@@ -11,8 +11,8 @@
 - **Admin auth** (SEC-03): every request, including static assets, passes Access JWT validation (RS256, JWKS, iss/aud/exp, owner email) and fails closed. CSRF check on writes (SEC-04).
 - **Public pipeline**: GET/HEAD only, strips any `Set-Cookie`, generic errors.
 - **Tests**:
-  - 72 Workers-runtime unit tests: TST-03 forged-token matrix, CSRF, config, headers, public DAL.
-  - 21 Playwright e2e tests × 3 browsers (Chromium, desktop WebKit, iPhone WebKit): TST-03 against the built admin, TST-04 on every public route type, axe, no cookies/storage/third-party requests, no CSP violations.
+  - 80 Workers-runtime unit tests: TST-03 forged-token matrix, CSRF, config, headers, public DAL.
+  - 22 Playwright e2e tests × 3 browsers (Chromium, desktop WebKit, iPhone WebKit): TST-03 against the built admin, TST-04 on every public route type, axe, no cookies/storage/third-party requests, no CSP violations.
 - **Guards**:
   - ESLint import boundary (public code → only `@cg/core/public|config|headers|errors`).
   - `npm run check:bundle`: the public bundle has no admin code, the dev bypass isn't shipped, and there are no inline scripts.
@@ -90,6 +90,25 @@ Then Claude:
 | Admin rejects unauthenticated requests (TST-03) | ✅ locally + CI + staging smoke test                              |
 | Headers test passes (TST-04)                    | ✅ locally + CI + staging smoke test                              |
 | CI green                                        | ✅ (2026-11-22, incl. staging deploy + ZAP)                       |
+
+### Security review (2026-11-22, after M0)
+
+Two independent reviews (application code; CI, supply chain and GitHub settings) plus live checks of Cloudflare, DNS and the owner's dashboards. Nothing was exploitable; staging was fully behind Access throughout. Fixes:
+
+- **GitHub settings** (D-40): secret scanning and push protection, private vulnerability reporting (the README already promised it), Dependabot security updates, Actions allowlist with SHA pinning, approval for all outside contributors' workflow runs, no admin bypass on `staging`.
+- **Deploy integrity:** the deploy job bundle-checks the exact staging build; `deploy-staging.ts` re-runs the bundle check and verifies the public `_headers` is the staging policy; builds refuse a non-production `NODE_ENV`.
+- **Dev-only behaviour confined** (D-41): the admin bypass and the public Report-Only CSP also require a loopback host. Top-level Wrangler configs renamed `cg-<app>-local`.
+- **Secrets in CI:** the Cloudflare token reaches only the migrate and deploy steps. The ZAP report is published only if redaction succeeds and now also redacts the admin host and team domain. The service-token headers are scoped to the staging host, and the scan fails if it didn't get past Access. Wrangler telemetry off.
+- **Admin:** rejects Access tokens older than 24 h (SEC-02) and non-application tokens; strips any app `Set-Cookie` (SEC-08).
+- **Tests:** smoke now checks a static asset's headers, that `/_headers` isn't served, and an exact 405. E2E expects an exact 405 and checks `/_headers`. Unit tests 72 → 80.
+- **Recorded:** D-39 (separate production credentials by M7), D-37 is defence in depth only.
+- **Owner checks:** one service token, Access policies and login methods correct, no other apps, Workers, members or stray API tokens.
+
+### Recurring maintenance
+
+- Quarterly: update the pinned ZAP image digest in `ci.yml` (Dependabot can't), and check the gitleaks version gitleaks-action downloads.
+- Before 2027-11-22: renew `ci-staging-deploy` and the `ci-staging` service token (`docs/security/tokens.md`).
+- During long breaks: `npx.cmd wrangler logout` on the owner's machine.
 
 ### Incidents
 

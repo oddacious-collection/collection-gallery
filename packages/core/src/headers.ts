@@ -108,14 +108,16 @@ export function securityHeaders(opts: HeaderOptions): Record<string, string> {
 const STRIPPED_HEADERS = ['x-powered-by', 'server-timing'];
 
 /**
- * Returns a copy of `response` with the security headers applied. On the
- * public host every `Set-Cookie` is removed (INV-3 / SEC-08: no cookies).
+ * Returns a copy of `response` with the security headers applied. Every
+ * `Set-Cookie` from the app is removed on both hosts (INV-3 / SEC-08): public
+ * sets no cookies at all, and on admin the only cookie is Access's own
+ * `CF_Authorization`, which Cloudflare sets at the edge, not via the Worker.
  */
 export function withSecurityHeaders(response: Response, opts: HeaderOptions): Response {
   // Responses from fetch() / ASSETS have immutable headers; rebuild.
   const out = new Response(response.body, response);
   for (const name of STRIPPED_HEADERS) out.headers.delete(name);
-  if (opts.host === 'public') out.headers.delete('set-cookie');
+  out.headers.delete('set-cookie');
   for (const [name, value] of Object.entries(securityHeaders(opts))) {
     out.headers.set(name, value);
   }

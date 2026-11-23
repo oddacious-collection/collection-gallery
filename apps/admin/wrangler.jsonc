@@ -2,10 +2,14 @@
 // validating the Access JWT itself on every request (SEC-03).
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "cg-admin",
+  // The top level is LOCAL DEVELOPMENT only (ENVIRONMENT=local, localhost
+  // origins). It deliberately does not use the production name, so a bare
+  // `wrangler deploy` can never overwrite production with local settings; it
+  // would create an unreachable "-local" Worker (no workers.dev, no routes).
+  // Staging and (from M7) production are explicit environments below.
+  "name": "cg-admin-local",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-10-28",
-  // Production stays off workers.dev; it will be served on admin.{{DOMAIN}} (M7).
   "workers_dev": false,
   // Version/preview URLs are public by default — never enable them.
   "preview_urls": false,

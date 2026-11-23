@@ -99,8 +99,14 @@ test.describe('public headers on every route type (TST-04)', () => {
   for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
     test(`${method} is rejected`, async ({ request }) => {
       const res = await request.fetch(`${PUBLIC}/`, { method });
-      expect([403, 405]).toContain(res.status());
+      // Exactly 405 from the pipeline (a 403 would mean something else refused it).
+      expect(res.status()).toBe(405);
       expectNoCookies(res);
     });
   }
+
+  test('the _headers file is not served', async ({ request }) => {
+    const res = await request.get(`${PUBLIC}/_headers`);
+    expect(res.status()).toBe(404);
+  });
 });

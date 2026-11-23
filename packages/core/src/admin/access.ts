@@ -4,7 +4,8 @@
  * Access sits in front of the admin host and enforces login, but the Worker
  * independently verifies the `Cf-Access-Jwt-Assertion` header on every request
  * (defence in depth): RS256 signature against the team's published keys,
- * issuer, audience, expiry, and that the email is the single admin email.
+ * issuer, audience, expiry, token age (24 h), and that the email is the single
+ * admin email.
  * Any failure — including network errors fetching keys — denies.
  */
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
@@ -13,6 +14,12 @@ export const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion';
 
 /** Real Access tokens are ~1 KB; anything this big is not one. */
 const MAX_TOKEN_LENGTH = 8192;
+
+/**
+ * SEC-02: admin sessions last at most 24 h. Enforced here too, so lengthening
+ * the Access session duration in the dashboard can't extend it.
+ */
+export const MAX_SESSION_AGE = '24h';
 
 export type AccessFailure = 'missing' | 'malformed' | 'invalid' | 'wrong_identity';
 
@@ -66,11 +73,14 @@ export async function verifyAccessRequest(
       issuer: opts.teamDomain,
       audience: opts.audience,
       requiredClaims: ['exp', 'iat'],
+      maxTokenAge: MAX_SESSION_AGE,
       clockTolerance: 5,
     }));
   } catch {
     return { ok: false, reason: 'invalid' };
   }
+  // Application tokens only (not the team-wide "org" token).
+  if (payload['type'] !== 'app') return { ok: false, reason: 'invalid' };
 
   const email = payload['email'];
   if (typeof email !== 'string' || normaliseEmail(email) !== opts.adminEmail) {
