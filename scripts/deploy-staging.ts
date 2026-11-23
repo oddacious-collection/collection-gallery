@@ -13,7 +13,9 @@
  *   ACCESS_TEAM_DOMAIN   e.g. https://<team>.cloudflareaccess.com   (admin only)
  *   ACCESS_AUD_ADMIN     the admin staging Access app's AUD tag      (admin only)
  */
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const app = process.argv[2];
@@ -32,6 +34,29 @@ function env(name: string): string {
   return v.replace(/\/$/, '');
 }
 
+function fail(message: string): never {
+  console.error(`deploy-staging: ${message}`);
+  process.exit(1);
+}
+
+const cwd = path.join(import.meta.dirname, '..', 'apps', app);
+const expectedName = `cg-${app}-staging`;
+
+// Guard: only deploy a build made for staging, to the Worker that Access
+// protects. (2026-11-22: a stray CLOUDFLARE_ENV made wrangler append a second
+// "-staging" and create new, unprotected Workers. Never again.)
+const built = JSON.parse(readFileSync(path.join(cwd, 'dist/server/wrangler.json'), 'utf8')) as {
+  name?: unknown;
+  workers_dev?: unknown;
+  preview_urls?: unknown;
+};
+if (built.name !== expectedName) {
+  fail(
+    `built config is for "${String(built.name)}", expected "${expectedName}" (build with CLOUDFLARE_ENV=staging)`,
+  );
+}
+if (built.preview_urls !== false) fail('preview_urls must be false');
+
 const vars: Record<string, string> =
   app === 'public'
     ? { PUBLIC_ORIGIN: env('STAGING_PUBLIC_URL') }
@@ -42,18 +67,44 @@ const vars: Record<string, string> =
         ACCESS_AUD: env('ACCESS_AUD_ADMIN'),
       };
 
+// The built config is already the flattened staging config. CLOUDFLARE_ENV
+// must not reach wrangler here, or it applies the environment a second time.
+const childEnv = { ...process.env };
+delete childEnv['CLOUDFLARE_ENV'];
+const opts: SpawnSyncOptions = { cwd, env: childEnv, shell: process.platform === 'win32' };
+
+// A unique marker on this deployment, checked afterwards on the expected Worker.
+const marker = `ci-${process.env['GITHUB_SHA'] ?? randomUUID()}`;
+
 const args = [
   'wrangler',
   'deploy',
   '--config',
   'dist/server/wrangler.json',
+  '--name',
+  expectedName,
+  '--message',
+  marker,
   ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`]),
   ...(dryRun ? ['--dry-run'] : []),
 ];
-const cwd = path.join(import.meta.dirname, '..', 'apps', app);
-const result = spawnSync('npx', args, {
-  cwd,
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-});
-process.exit(result.status ?? 1);
+const deployed = spawnSync('npx', args, { ...opts, stdio: 'inherit' });
+if (deployed.status !== 0) process.exit(deployed.status ?? 1);
+if (dryRun) process.exit(0);
+
+// Verify the deploy landed on the expected Worker. Parse only: the JSON
+// includes the deployer's identity, which must not reach the public CI log.
+const status = spawnSync(
+  'npx',
+  ['wrangler', 'deployments', 'status', '--name', expectedName, '--json'],
+  { ...opts, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' },
+);
+let message: unknown;
+try {
+  const parsed = JSON.parse(String(status.stdout)) as { annotations?: Record<string, unknown> };
+  message = parsed.annotations?.['workers/message'];
+} catch {
+  message = undefined;
+}
+if (message !== marker) fail(`${expectedName} is not running this deploy`);
+console.log(`deploy-staging: verified ${expectedName} is running this deploy`);

@@ -178,37 +178,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Obtain a short-lived Access session for the scan
-        id: access
+      # Access doesn't issue a session cookie to service tokens, so ZAP sends
+      # the two service-token headers on every request (replacer rules).
+      - name: Run ZAP baseline (passive) scan
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          set -euo pipefail
-          cookie="$(curl -sS -o /dev/null -D - \
-            -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
-            -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
-            "${TARGET}/" | tr -d '\r' \
-            | sed -nE 's/^[Ss]et-[Cc]ookie: CF_Authorization=([^;]+).*/\1/p' | head -n1)"
-          if [ -z "${cookie}" ]; then echo "No Access session cookie returned" >&2; exit 1; fi
-          echo "::add-mask::${cookie}"
-          echo "cookie=${cookie}" >> "${GITHUB_OUTPUT}"
-      - name: Run ZAP baseline (passive) scan
-        env:
-          ACCESS_COOKIE: ${{ steps.access.outputs.cookie }}
-        run: |
           set -uo pipefail
           mkdir -p zap && cp .zap/rules.tsv zap/ && chmod -R 777 zap
-          docker run --rm -v "${PWD}/zap:/zap/wrk:rw" \
-            -e ZAP_AUTH_HEADER=Cookie \
-            -e "ZAP_AUTH_HEADER_VALUE=CF_Authorization=${ACCESS_COOKIE}" \
-            ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af \
-            zap-baseline.py -t "${TARGET}" -c rules.tsv -w report.md -I
+          rule() { # index, header, value
+            printf -- '-config replacer.full_list(%s).%s '               "$1" "description=$2" "$1" "enabled=true" "$1" "matchtype=REQ_HEADER"               "$1" "matchstr=$2" "$1" "regex=false" "$1" "replacement=$3"
+          }
+          zopts="$(rule 0 CF-Access-Client-Id "${CF_ACCESS_CLIENT_ID}")$(rule 1 CF-Access-Client-Secret "${CF_ACCESS_CLIENT_SECRET}")"
+          zopts="${zopts% }"
+          docker run --rm -v "${PWD}/zap:/zap/wrk:rw"             ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af             zap-baseline.py -t "${TARGET}" -c rules.tsv -w report.md -I -z "${zopts}"
           status=$?
-          # Never publish the session token, even if ZAP quoted it as evidence,
-          # nor the staging hostname (D-37): the summary is public.
-          sed -E -i 's/CF_Authorization=[^;[:space:]]*/CF_Authorization=REDACTED/g' zap/report.md || true
+          # The step summary is public: never publish the service token (even if
+          # ZAP quoted a request as evidence) or the staging hostname (D-37).
           host="${TARGET#https://}"; host="${host%%/*}"
-          sed -i "s#${host}#staging-public-host#g" zap/report.md || true
+          python3 - "${CF_ACCESS_CLIENT_ID}" "${CF_ACCESS_CLIENT_SECRET}" "${host}" <<'PY' || true
+          import sys
+          p = "zap/report.md"
+          s = open(p, encoding="utf-8").read()
+          cid, secret, host = sys.argv[1:4]
+          for value, label in ((secret, "REDACTED"), (cid, "REDACTED"), (host, "staging-public-host")):
+              if value:
+                  s = s.replace(value, label)
+          open(p, "w", encoding="utf-8").write(s)
+          PY
           cat zap/report.md >> "${GITHUB_STEP_SUMMARY}" || true
           exit "${status}"

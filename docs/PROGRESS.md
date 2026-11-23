@@ -43,7 +43,7 @@ Then Claude:
 
 1. [x] Staging values stored as GitHub `staging` **secrets** (not variables: Actions logs are public, D-37), with log masking in the workflow.
 2. [x] `env.staging.workers_dev: true` in both configs. Both `workers.dev` URLs verified to redirect signed-out visitors to Access (2026-11-22).
-3. [ ] Push (after owner OK), set `STAGING_ENABLED=true`, watch the deploy, smoke test and ZAP baseline.
+3. [ ] Push (after owner OK), set `STAGING_ENABLED=true`, watch the deploy, smoke test and ZAP baseline. First attempt 2026-11-22 found two bugs (see Incidents); fixed, awaiting re-run.
 4. [ ] The owner checks sign-in in a private browser window (their GitHub account gets in; any other account is refused).
 5. [ ] Branch protection on `main` (owner, with Claude's exact settings).
 6. [ ] M0 review summary.
@@ -56,6 +56,16 @@ Then Claude:
 | Admin rejects unauthenticated requests (TST-03) | ✅ locally + CI; ⏳ staging smoke test       |
 | Headers test passes (TST-04)                    | ✅ locally + CI; ⏳ staging smoke test       |
 | CI green                                        | ✅ (2026-11-13)                              |
+
+### Incidents
+
+- **2026-11-22: first CI staging deploy went to the wrong Workers.** The deploy job's `CLOUDFLARE_ENV=staging` reached `wrangler deploy` on the already-flattened staging config. Wrangler then appended a second `-staging`, creating new Workers `cg-public-staging-staging` and `cg-admin-staging-staging` on `workers.dev` without Access.
+  - The public one served the placeholder hello-world page to anyone for about 4 minutes. No private data existed.
+  - The admin one failed closed (500: no `ADMIN_EMAIL`).
+  - Both were deleted, and `STAGING_ENABLED` was set to false.
+  - The smoke test passed only because it hit the real (old) Workers.
+  - **Fixes:** `scripts/deploy-staging.ts` now refuses unless the build is the staging config for `cg-<app>-staging`, strips `CLOUDFLARE_ENV`, passes `--name` explicitly, and then verifies (via a per-deploy message) that the expected Worker is running this deploy.
+  - Also: Access doesn't issue a session cookie to service tokens, so the ZAP job now sends the service-token headers via ZAP replacer rules.
 
 ### Deviations from the spec
 
