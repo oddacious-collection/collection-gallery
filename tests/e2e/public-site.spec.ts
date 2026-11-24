@@ -142,6 +142,14 @@ test.describe('photos (MED-10)', () => {
       );
     }
   });
+
+  test('a photo waiting in the inbox is never public (D-55)', async ({ request }) => {
+    const { variants, original } = manifest.inbox;
+    expect(variants.length).toBeGreaterThan(0);
+    for (const key of [...variants, original]) {
+      expect((await request.get(`${PUBLIC}/media/${key}`)).status(), key).toBe(404);
+    }
+  });
 });
 
 test.describe('search (PUB-08)', () => {

@@ -191,14 +191,39 @@ export const mediaUploads = sqliteTable(
   'media_uploads',
   {
     id: text('id').primaryKey(), // random key, never reused
-    itemId: text('item_id')
-      .notNull()
-      .references(() => items.id, { onDelete: 'cascade' }),
+    /** The item the photo is for; NULL for an upload into the photo inbox (D-55). */
+    itemId: text('item_id').references(() => items.id, { onDelete: 'cascade' }),
     /** JSON: the planned files, each with its storage key (see admin/media.ts). */
     parts: text('parts').notNull(),
     createdAt: text('created_at').notNull(),
   },
   (t) => [index('media_uploads_created_idx').on(t.createdAt)],
+);
+
+/**
+ * The photo inbox (D-55): photos uploaded without an item, waiting to be
+ * assigned. Kept apart from `media` on purpose: public queries only ever
+ * read `media`/`media_variants`, so an inbox photo can't reach the public
+ * site. Assigning a photo moves it into `media` (same storage keys) and
+ * deletes the row here. Removing is soft (30-day restore). ADMIN.
+ */
+export const inboxPhotos = sqliteTable(
+  'inbox_photos',
+  {
+    id: text('id').primaryKey(), // ULID
+    /** JSON: the stored files (same shape as media_uploads.parts). */
+    parts: text('parts').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    /** SHA-256 of the master (IMP-03). */
+    contentHash: text('content_hash'),
+    createdAt: text('created_at').notNull(),
+    deletedAt: text('deleted_at'),
+  },
+  (t) => [
+    index('inbox_photos_created_idx').on(t.createdAt),
+    check('inbox_photos_dimensions_check', sql`${t.width} > 0 AND ${t.height} > 0`),
+  ],
 );
 
 // ------------------------------------------------------------------- categories (§4.3)

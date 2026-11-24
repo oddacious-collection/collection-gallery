@@ -11,6 +11,7 @@ import {
   cleanupStaleUploads,
   createAdminPipeline,
   purgeExpiredTrash,
+  purgeRemovedInbox,
   purgeRemovedMedia,
 } from '@cg/core/admin';
 import { createDevPipeline } from './dev-only.ts';
@@ -27,6 +28,7 @@ const scheduled: ExportedHandlerScheduledHandler<Env> = async (_controller, env,
     (async () => {
       await purgeExpiredTrash(env.DB, env);
       await purgeRemovedMedia(env.DB, env);
+      await purgeRemovedInbox(env.DB, env);
       await cleanupStaleUploads(env.DB, env);
     })(),
   );

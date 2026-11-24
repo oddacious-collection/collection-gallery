@@ -1,0 +1,209 @@
+---
+/**
+ * The photo inbox (D-55): upload many photos at once, then sort them into
+ * items. Tap photos in the order you want them (the first becomes the cover),
+ * then create a draft (title + category, remembered via ?cat=) or, when
+ * opened from an item (?for=<id>), add them to that item.
+ */
+import { env } from 'cloudflare:workers';
+import {
+  DomainError,
+  getItem,
+  listCategoryTree,
+  listInbox,
+  recentInboxAssignments,
+} from '@cg/core/admin';
+import Admin from '../layouts/Admin.astro';
+import { shortDateTime } from '../lib/format.ts';
+
+const forId = Astro.url.searchParams.get('for');
+let forItem: { id: string; title: string } | null = null;
+if (forId) {
+  try {
+    const it = await getItem(env.DB, forId);
+    if (it.deletedAt === null) forItem = { id: it.id, title: it.title };
+  } catch (err) {
+    if (!(err instanceof DomainError)) throw err;
+  }
+}
+const doneId = Astro.url.searchParams.get('done');
+let done: { id: string; title: string } | null = null;
+if (doneId) {
+  try {
+    const it = await getItem(env.DB, doneId);
+    done = { id: it.id, title: it.title };
+  } catch (err) {
+    if (!(err instanceof DomainError)) throw err;
+  }
+}
+const lastCategory = Astro.url.searchParams.get('cat') ?? '';
+const [inbox, tree, recent] = await Promise.all([
+  listInbox(env.DB),
+  listCategoryTree(env.DB),
+  recentInboxAssignments(env.DB),
+]);
+const fit = (p: { width: number; height: number }, box: number) =>
+  p.width >= p.height
+    ? { width: box, height: Math.max(1, Math.round((box * p.height) / p.width)) }
+    : { width: Math.max(1, Math.round((box * p.width) / p.height)), height: box };
+---
+
+<Admin title="Inbox · Admin">
+  <h1>Photo inbox</h1>
+  {forItem && (
+    <p class="message ok-banner" role="status">
+      Choose photos to add to <strong>{forItem.title}</strong>.{' '}
+      <a href={`/items/${forItem.id}#photos`}>Back to the item</a>
+    </p>
+  )}
+  {done && (
+    <p class="message ok-banner" role="status">
+      Created draft “{done.title}”. <a href={`/items/${done.id}`}>Open it</a> to add a description,
+      or keep sorting.
+    </p>
+  )}
+
+  <section
+    class="card"
+    data-photos
+    data-begin-url="/api/inbox/uploads"
+    data-finish-label="Adding the photo to the inbox"
+    aria-labelledby="add-h"
+  >
+    <h2 id="add-h">Add photos</h2>
+    <label for="photo-input">Choose photos (as many as you like)</label>
+    <input id="photo-input" type="file" accept="image/*" multiple data-photo-input />
+    <p class="hint">
+      Each photo is processed on this device (rotated upright; location, camera and date details
+      removed) and uploaded one at a time. On iPhone, keep this page open until all are done.
+    </p>
+    <ul class="photo-progress" data-photo-progress aria-live="polite"></ul>
+  </section>
+
+  <section class="card" aria-labelledby="waiting-h">
+    <h2 id="waiting-h">Waiting to be used ({inbox.photos.length})</h2>
+    {inbox.photos.length === 0 ? (
+      <p class="muted">The inbox is empty.</p>
+    ) : (
+      <>
+        <p class="hint">Tap photos in the order you want them. The first one becomes the cover.</p>
+        <ul class="inbox-grid" data-inbox-grid>
+          {inbox.photos.map((p) => (
+            <li>
+              <button
+                type="button"
+                class="inbox-photo"
+                data-inbox-id={p.id}
+                aria-pressed="false"
+                aria-label={`Photo uploaded ${shortDateTime(p.createdAt)}, ${p.width}×${p.height}`}
+              >
+                {p.thumbKey && <img src={`/media/${p.thumbKey}`} {...fit(p, 150)} alt="" />}
+                <span class="pick-no" data-pick-no aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
+  </section>
+
+  {recent.length > 0 && (
+    <section class="card" aria-labelledby="recent-h">
+      <h2 id="recent-h">Recently used</h2>
+      <ul class="recent-list">
+        {recent.map((r) => (
+          <li>
+            <a href={`/items/${r.itemId}`}>
+              {r.coverKey ? (
+                <img class="thumb" src={`/media/${r.coverKey}`} width="48" height="48" alt="" />
+              ) : (
+                <span class="thumb" aria-hidden="true" />
+              )}
+              <span>{r.title}</span>
+            </a>
+            <span class="hint">
+              {r.photos} photo{r.photos === 1 ? '' : 's'} · {shortDateTime(r.at)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {inbox.removed.length > 0 && (
+    <section class="card">
+      <details>
+        <summary>Removed photos ({inbox.removed.length}, kept 30 days)</summary>
+        <ul class="inbox-grid removed">
+          {inbox.removed.map((p) => (
+            <li>
+              {p.thumbKey && <img src={`/media/${p.thumbKey}`} {...fit(p, 100)} alt="" />}
+              <button
+                type="button"
+                class="small"
+                data-api="/api/inbox/restore"
+                data-body={JSON.stringify({ photoIds: [p.id] })}
+              >
+                Restore
+              </button>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
+  )}
+
+  {inbox.photos.length > 0 && (
+    <div class="save-bar inbox-bar" data-inbox-bar data-for-item={forItem?.id}>
+      <p class="save-status" data-inbox-status role="status">
+        Nothing selected yet.
+      </p>
+      <div class="actions">
+        {forItem ? (
+          <button type="button" class="primary" data-inbox-add disabled>
+            Add to “{forItem.title}”
+          </button>
+        ) : (
+          <button type="button" class="primary" data-inbox-open disabled>
+            Create draft…
+          </button>
+        )}
+        <button type="button" class="danger small" data-inbox-remove disabled>
+          Remove
+        </button>
+      </div>
+      <p data-inbox-message role="status"></p>
+      {!forItem && (
+        <dialog class="inbox-dialog" data-inbox-dialog aria-labelledby="inbox-dialog-h">
+          <h2 id="inbox-dialog-h">New draft</h2>
+          <p class="hint" data-inbox-dialog-count></p>
+          <label for="inbox-title">Title</label>
+          <input id="inbox-title" type="text" maxlength="200" autocomplete="off" data-inbox-title />
+          <label for="inbox-category">Category</label>
+          <select id="inbox-category" data-inbox-category>
+            <option value="">(none yet)</option>
+            {tree.map((c) => (
+              <option value={c.id} selected={c.id === lastCategory}>
+                {`${' '.repeat(c.depth)}${c.name}`}
+              </option>
+            ))}
+          </select>
+          <p class="hint">The category is remembered for the next draft.</p>
+          <p data-inbox-dialog-message role="status"></p>
+          <div class="actions">
+            <button type="button" class="primary" data-inbox-create>
+              Create draft
+            </button>
+            <button type="button" data-inbox-cancel>
+              Cancel
+            </button>
+          </div>
+        </dialog>
+      )}
+    </div>
+  )}
+</Admin>
+<script>
+  import '../scripts/photos/upload.ts';
+  import '../scripts/inbox.ts';
+</script>

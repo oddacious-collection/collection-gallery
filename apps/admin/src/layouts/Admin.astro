@@ -1,5 +1,7 @@
 ---
 import '../styles/admin.css';
+import { env } from 'cloudflare:workers';
+import { countInbox } from '@cg/core/admin';
 
 interface Props {
   title: string;
@@ -7,9 +9,15 @@ interface Props {
 const { title } = Astro.props;
 const path = Astro.url.pathname;
 const view = Astro.url.searchParams.get('view');
+const inbox = await countInbox(env.DB);
 const nav = [
   { href: '/items', label: 'Items', current: path === '/items' && view !== 'trash' },
   { href: '/items/new', label: 'New item', current: path === '/items/new' },
+  {
+    href: '/inbox',
+    label: inbox > 0 ? `Inbox (${inbox})` : 'Inbox',
+    current: path === '/inbox',
+  },
   { href: '/categories', label: 'Categories', current: path === '/categories' },
   { href: '/items?view=trash', label: 'Trash', current: path === '/items' && view === 'trash' },
 ];
