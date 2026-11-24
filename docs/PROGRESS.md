@@ -44,6 +44,10 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - runbooks (BAK-07).
 8. [ ] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review.
 
+### Owner feedback
+
+- 2026-11-24, after trying uploads on staging: creating categories meant leaving the item (and losing unsaved edits). Fixed: "+ New category" inside the item editor creates the category, ticks it and saves without a reload; admin pages now warn before leaving with unsaved changes.
+
 ### Owner tasks for M1
 
 Claude gives click-by-click steps when each is needed.

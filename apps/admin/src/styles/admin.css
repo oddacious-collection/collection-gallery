@@ -405,3 +405,22 @@ input[type='file'] {
   background: var(--bg);
   flex: none;
 }
+
+/* "+ New category" inside the item editor's Categories card. */
+.new-category {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.new-category summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 2.25rem;
+  display: flex;
+  align-items: center;
+}
+
+[data-new-category-message].error {
+  color: var(--danger);
+}
