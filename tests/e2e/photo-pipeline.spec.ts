@@ -55,6 +55,8 @@ interface Capture {
   requests: string[];
   /** CSP / Trusted Types violations and page errors, across reloads. */
   violations: string[];
+  /** Every progress message shown while uploading. */
+  progress: string[];
 }
 
 async function harness(page: Page): Promise<Capture> {
@@ -64,6 +66,7 @@ async function harness(page: Page): Promise<Capture> {
     finalized: false,
     requests: [],
     violations: [],
+    progress: [],
   };
   const headers = securityHeaders({ host: 'admin', environment: 'local' });
   const script = editorScript();
@@ -85,6 +88,17 @@ async function harness(page: Page): Promise<Capture> {
     }
   });
   page.on('pageerror', (e) => capture.violations.push(`pageerror: ${e.message}`));
+  // Progress messages, through the console (the page reloads after an upload).
+  await page.addInitScript(() => {
+    new MutationObserver(() => {
+      document.querySelectorAll('[data-photo-progress] li').forEach((li) => {
+        console.info(`PROGRESS ${li.textContent ?? ''}`);
+      });
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  });
+  page.on('console', (m) => {
+    if (m.text().startsWith('PROGRESS ')) capture.progress.push(m.text().slice(9));
+  });
 
   await page.route(`${ORIGIN}/**`, async (route: Route) => {
     const req = route.request();
@@ -220,6 +234,20 @@ test('a camera photo: rotated upright, every byte of metadata gone, all sizes ma
     ).toBe(true);
   }
 
+  // Each step is named, so a failure can be traced to it.
+  const steps = capture.progress.join(' | ');
+  for (const s of [
+    'Checking the file type',
+    'Making the full-size copy (private)',
+    'Making the 600 px web size',
+    'Making the link-preview image',
+    'Uploading the full-size copy (private) (file 1 of 4)',
+    'Uploading the link-preview image (file 4 of 4)',
+    'Attaching the photo to the item',
+  ]) {
+    expect(steps, s).toContain(s);
+  }
+
   // The real admin CSP (with Trusted Types and only 'wasm-unsafe-eval' added) held.
   expect(capture.violations).toEqual([]);
 });
@@ -290,6 +318,8 @@ test('refused files: nothing is processed or sent', async ({ page }) => {
   await expect(rows.nth(0)).toContainText('never accepted');
   await expect(rows.nth(1)).toContainText('GIF files are not accepted');
   await expect(rows.nth(2)).toContainText('HEIC');
+  await expect(rows.nth(2)).toContainText('Stopped at: Opening the photo');
+  await expect(rows.nth(0)).toContainText('Stopped at: Checking the file type');
   await expect(page.locator('input[data-photo-input]')).toBeEnabled();
   expect(capture.requests.filter((r) => r.includes('/api/'))).toEqual([]);
   expect(capture.violations).toEqual([]);

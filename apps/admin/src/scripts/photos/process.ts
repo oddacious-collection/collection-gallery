@@ -163,9 +163,9 @@ export async function processPhoto(
   encodeWebp: WebpEncoder,
   onStep: (label: string) => void = () => {},
 ): Promise<ProcessedPhoto> {
-  onStep('Checking');
+  onStep('Checking the file type');
   const kind = await checkInput(file);
-  onStep('Opening');
+  onStep('Opening the photo');
   const bitmap = await decodePhoto(file, kind);
   let master: HTMLCanvasElement;
   try {
@@ -180,7 +180,7 @@ export async function processPhoto(
     const plan = uploadPlan(master.width, master.height);
     const files = new Map<string, Uint8Array>();
     for (const part of plan) {
-      onStep(part.role === 'original' ? 'Making the full-size copy' : `Making size ${part.name}`);
+      onStep(`Making the ${partLabel(part)}`);
       await new Promise((r) => setTimeout(r, 0));
       let bytes: Uint8Array;
       if (part.role === 'original') {
@@ -209,4 +209,11 @@ export async function processPhoto(
   } finally {
     release(master);
   }
+}
+
+/** A plain-language name for one of a photo's files, for progress messages. */
+export function partLabel(part: Pick<PlannedPart, 'role' | 'width' | 'height'>): string {
+  if (part.role === 'original') return 'full-size copy (private)';
+  if (part.role === 'og') return 'link-preview image';
+  return `${Math.max(part.width, part.height)} px web size`;
 }
