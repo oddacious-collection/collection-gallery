@@ -14,7 +14,7 @@
  * (public-site service token, D-24), CLOUDFLARE_API_TOKEN and
  * CLOUDFLARE_ACCOUNT_ID (D1 access for the SQL steps).
  */
-import { applySql, runPhase, selfCheck } from '../tests/leak/run.ts';
+import { applySql, privateFacts, runPhase, selfCheck } from '../tests/leak/run.ts';
 
 function env(name: string): string {
   const v = process.env[name];
@@ -39,9 +39,9 @@ try {
   applySql(staging, 'sentinels.sql');
   applySql(staging, 'toggle-a.sql');
   if (!(await selfCheck(base, headers))) failures++;
-  failures += (await runPhase('a', base, staging, headers)).failures.length;
+  failures += (await runPhase('a', base, privateFacts(staging), headers)).failures.length;
   applySql(staging, 'toggle-b.sql');
-  failures += (await runPhase('b', base, staging, headers)).failures.length;
+  failures += (await runPhase('b', base, privateFacts(staging), headers)).failures.length;
 } finally {
   applySql(staging, 'toggle-a.sql');
 }

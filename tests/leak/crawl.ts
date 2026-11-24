@@ -44,6 +44,9 @@ export interface CrawlResult {
   failures: string[];
 }
 
+/** Shorter markers are checked in page text only (see `found`). */
+const MIN_OPAQUE_MARKER = 8;
+
 const TEXT_TYPES = /^(text\/|application\/(json|xml|javascript)|image\/svg)/;
 
 function linksIn(html: string): string[] {
@@ -101,10 +104,16 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     return { res, type, text };
   };
 
-  const found = (text: string) =>
-    needles.filter((n) =>
-      n.caseSensitive ? text.includes(n.value) : text.toLowerCase().includes(n.lower),
-    );
+  /**
+   * Markers present in `text`. Short markers (under 8 characters, like a
+   * 3-letter currency) are only looked for in page text: photo bytes and
+   * header tokens are random enough to contain them by chance.
+   */
+  const found = (text: string, opaque = false) =>
+    needles.filter((n) => {
+      if (opaque && n.value.length < MIN_OPAQUE_MARKER) return false;
+      return n.caseSensitive ? text.includes(n.value) : text.toLowerCase().includes(n.lower);
+    });
 
   /**
    * The visitor's own search words are shown back to them (the search box,
@@ -127,9 +136,10 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
 
   const scan = (where: string, res: Response, text: string, path = where) => {
     if (res.headers.get('set-cookie')) fail(`${where}: sets a cookie`);
-    for (const n of found(withoutEcho(path, text))) fail(`${where}: contains ${n.label}`);
+    const binary = !TEXT_TYPES.test(res.headers.get('content-type') ?? '');
+    for (const n of found(withoutEcho(path, text), binary)) fail(`${where}: contains ${n.label}`);
     for (const [name, value] of res.headers) {
-      for (const n of found(withoutEcho(path, value)))
+      for (const n of found(withoutEcho(path, value), true))
         fail(`${where}: header ${name} contains ${n.label}`);
     }
   };
