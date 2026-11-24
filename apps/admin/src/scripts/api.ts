@@ -123,6 +123,90 @@ function fill(template: string, data: Record<string, unknown>): string {
   );
 }
 
+async function request(
+  url: string,
+  method: string,
+  body: Record<string, Json> | null,
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  const res = await fetch(url, {
+    method,
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json', [CSRF_HEADER]: '1' },
+    body: body === null ? null : JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ok: res.ok, status: res.status, data };
+}
+
+// ------------------------------------------------------------------ unsaved changes
+//
+// Typing in or ticking a field of an API form marks it "dirty" until it is
+// saved. Anything that reloads or leaves the page first saves every other
+// dirty form, so an edit in one card is never lost (or blocks a reload) when
+// another card is saved, a photo is moved or the item is published. Only
+// leaving by a link, Back or closing the tab with unsaved changes asks first.
+
+const dirtyForms = (): HTMLFormElement[] =>
+  Array.from(document.querySelectorAll<HTMLFormElement>('form[data-api][data-dirty]'));
+
+function formLabel(form: HTMLFormElement): string {
+  return (
+    form.dataset['label'] ??
+    form.querySelector('h2')?.textContent?.trim() ??
+    'A form'
+  ).replace(/\s+/g, ' ');
+}
+
+function updateSaveBar(): void {
+  const bar = document.querySelector<HTMLElement>('[data-save-bar]');
+  if (!bar) return;
+  const status = bar.querySelector<HTMLElement>('[data-save-status]');
+  const save = bar.querySelector<HTMLButtonElement>('[data-save-all]');
+  const labels = dirtyForms().map(formLabel);
+  bar.classList.toggle('dirty', labels.length > 0);
+  if (status) {
+    status.textContent = labels.length
+      ? `Unsaved changes: ${labels.join(', ')}.`
+      : 'All changes saved.';
+  }
+  if (save) save.disabled = labels.length === 0;
+}
+
+/** Saves one form without reloading. Returns false (and shows why) on failure. */
+async function saveForm(form: HTMLFormElement): Promise<boolean> {
+  try {
+    const r = await request(
+      form.dataset['api'] ?? '',
+      form.dataset['method'] ?? 'POST',
+      formBody(form),
+    );
+    if (!r.ok) {
+      showMessage(form, describeError(r.status, r.data), false);
+      return false;
+    }
+    delete form.dataset['dirty'];
+    showMessage(form, 'Saved.', true);
+    return true;
+  } catch {
+    showMessage(form, 'Network error. Nothing was changed; try again.', false);
+    return false;
+  } finally {
+    updateSaveBar();
+  }
+}
+
+/** Saves every form with unsaved changes (except `except`), stopping at the first failure. */
+async function saveDirtyForms(except: Element | null = null): Promise<boolean> {
+  for (const form of dirtyForms()) {
+    if (form === except) continue;
+    if (!(await saveForm(form))) {
+      form.scrollIntoView({ block: 'center' });
+      return false;
+    }
+  }
+  return true;
+}
+
 async function send(
   el: HTMLElement,
   url: string,
@@ -132,24 +216,28 @@ async function send(
   const confirmText = el.dataset['confirm'];
   if (confirmText && !window.confirm(confirmText)) return;
   const scope = el.closest('form') ?? el.closest('[data-api-scope]') ?? document.body;
+  const then = el.dataset['then'] ?? 'reload';
   el.setAttribute('aria-busy', 'true');
   try {
-    const res = await fetch(url, {
-      method,
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', [CSRF_HEADER]: '1' },
-      body: body === null ? null : JSON.stringify(body),
-    });
-    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    // Reloading or leaving: save the other cards' edits first.
+    if (then !== 'none' && !(await saveDirtyForms(el instanceof HTMLFormElement ? el : null))) {
+      showMessage(
+        scope,
+        "Another section couldn't be saved (see its message), so nothing else was done.",
+        false,
+      );
+      return;
+    }
+    const res = await request(url, method, body);
     if (!res.ok) {
-      showMessage(scope, describeError(res.status, data), false);
+      showMessage(scope, describeError(res.status, res.data), false);
       return;
     }
     // A saved form has no unsaved changes any more.
     if (el instanceof HTMLFormElement) delete el.dataset['dirty'];
-    const then = el.dataset['then'] ?? 'reload';
+    updateSaveBar();
     if (then.startsWith('redirect:')) {
-      window.location.assign(fill(then.slice('redirect:'.length), data));
+      window.location.assign(fill(then.slice('redirect:'.length), res.data));
     } else if (then === 'reload') {
       window.location.reload();
     } else {
@@ -162,16 +250,52 @@ async function send(
   }
 }
 
-// Unsaved changes: typing in or ticking a field of an API form marks it
-// "dirty" until it is saved, and leaving the page then asks first.
 function markDirty(event: Event): void {
   const field = event.target;
   if (!(field instanceof HTMLElement) || !field.getAttribute('name')) return;
   const form = field.closest<HTMLFormElement>('form[data-api]');
-  if (form) form.dataset['dirty'] = '1';
+  if (form && form.dataset['dirty'] !== '1') {
+    form.dataset['dirty'] = '1';
+    updateSaveBar();
+  }
 }
 document.addEventListener('input', markDirty);
 document.addEventListener('change', markDirty);
+
+// The save bar: "Save" saves every section; "Save and close" also goes back to the list.
+document.addEventListener('click', (event) => {
+  const button = (event.target as Element | null)?.closest('[data-save-all], [data-save-close]');
+  if (!(button instanceof HTMLButtonElement)) return;
+  event.preventDefault();
+  void (async () => {
+    button.setAttribute('aria-busy', 'true');
+    const ok = await saveDirtyForms();
+    button.removeAttribute('aria-busy');
+    if (!ok) return;
+    const href = button.dataset['href'];
+    if (button.hasAttribute('data-save-close') && href) window.location.assign(href);
+    else window.location.reload();
+  })();
+});
+
+// Tag suggestions add the tag to the box, then save the Tags section.
+document.addEventListener('click', (event) => {
+  const button = (event.target as Element | null)?.closest('button[data-add-tag]');
+  if (!(button instanceof HTMLButtonElement)) return;
+  const form = button.closest('form');
+  const input = form?.querySelector<HTMLInputElement>('input[name="tags"]');
+  const tag = button.dataset['addTag'] ?? '';
+  if (!form || !input || !tag) return;
+  event.preventDefault();
+  const tags = input.value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!tags.some((t) => t.toLowerCase() === tag.toLowerCase())) tags.push(tag);
+  input.value = tags.join(', ');
+  form.dataset['dirty'] = '1';
+  form.requestSubmit();
+});
 window.addEventListener('beforeunload', (event) => {
   if (document.querySelector('form[data-api][data-dirty]')) {
     event.preventDefault();
@@ -213,16 +337,17 @@ document.addEventListener('click', (event) => {
   const list = row?.parentElement;
   const itemId = list?.dataset['itemId'];
   if (!row || !list || !itemId) return;
-  const dir = button.dataset['photoMove'];
-  if (dir === 'first') list.insertBefore(row, list.firstElementChild);
-  else if (dir === 'up' && row.previousElementSibling)
-    list.insertBefore(row, row.previousElementSibling);
-  else if (dir === 'down' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
-  else return;
-  const order = Array.from(list.children)
+  const ids = Array.from(list.children)
     .map((c) => (c as HTMLElement).dataset['mediaId'])
     .filter((x): x is string => Boolean(x));
-  void send(button, `/api/items/${encodeURIComponent(itemId)}/media/order`, 'PUT', { order });
+  const from = ids.indexOf((row as HTMLElement).dataset['mediaId'] ?? '');
+  const dir = button.dataset['photoMove'];
+  const to = dir === 'first' ? 0 : dir === 'up' ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= ids.length || to === from) return;
+  const [moved] = ids.splice(from, 1);
+  if (moved) ids.splice(to, 0, moved);
+  // The page reloads with the new order (and the right buttons) once it's saved.
+  void send(button, `/api/items/${encodeURIComponent(itemId)}/media/order`, 'PUT', { order: ids });
 });
 
 // Reorder buttons for category siblings: move the row, then send the new order.

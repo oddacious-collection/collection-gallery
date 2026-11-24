@@ -55,6 +55,8 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
 ### Owner feedback
 
 - 2026-11-24, after trying uploads on staging: creating categories meant leaving the item (and losing unsaved edits). Fixed: "+ New category" inside the item editor creates the category, ticks it and saves without a reload; admin pages now warn before leaving with unsaved changes.
+- 2026-11-24: upload progress said "Uploading 1 of 7" (unclear). Now each step and file is named, and an error says where it stopped.
+- 2026-11-24: moving a photo, saving one section or publishing reloaded the page, which hit the unsaved-changes warning when another section had edits (and left stale "Make cover" buttons). Now every reload or exit first saves all edited sections; the editor has a save bar (what is unsaved, Save, Save and close); Publish returns to the item list with a link to the public page; the cover photo has a badge.
 
 ### Owner tasks for M1
 
