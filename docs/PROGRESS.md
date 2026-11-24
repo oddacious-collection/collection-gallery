@@ -1,6 +1,64 @@
 # Progress
 
-## Status: M0 Foundations — exit criteria met 2026-11-22; awaiting owner review
+## Status: M1 Core gallery — kickoff approved 2026-11-23 (M0 complete 2026-11-22)
+
+## M1 Core gallery (in progress)
+
+Kickoff 2026-11-23. The owner approved decisions D-42 to D-48, the D-21/D-22/D-26 amendments, and this plan.
+
+**Exit criteria (§12):**
+
+- The owner photographs an item on iPhone, publishes it, and sees it publicly.
+- Toggling it private removes it everywhere within 60 s.
+- TST-02 passes.
+- The restore drill succeeds.
+
+### Plan (one PR per step; each goes through CI and staging)
+
+1. [ ] Kickoff docs: decisions D-42 to D-48, the D-22 correction, the threat model and this plan.
+2. [ ] Data model, all of §4:
+   - migrations, including the admin-only `source_caption` and hashtag suggestions (D-42);
+   - ULIDs, slugs with redirects, revision snapshots, audit log, Zod schemas;
+   - public and admin data-access layers.
+3. [ ] Admin items:
+   - create, edit, publish, Public/Private toggle;
+   - trash with restore and 30-day auto-purge;
+   - revision history with diff and restore;
+   - category tree (cycle-safe, multi-category, CNT-01 to 03);
+   - assigning tags.
+4. [ ] Photo pipeline (MED-01 to 05, 07, 13):
+   - on-device processing: orientation, strip all metadata, JPEG master at 4608 px or less, WebP 400/800/1200/1600/2048 plus a 1200 px JPEG for Open Graph, creator/copyright written back;
+   - proxied upload (D-46) and finalize verification (MED-03);
+   - upload tests (the image parts of TST-05).
+5. [ ] Public site:
+   - home, category pages (descendants included), item page with carousel and full-screen view, vertical feed (PUB-05);
+   - search (FTS5, public data only, rate-limited, PUB-08);
+   - media serving with a visibility check and Range support (MED-10);
+   - identical 404s (PUB-15), slug 301s, basic Open Graph.
+6. [ ] Privacy-leak suite (TST-02): a local deploy gate in CI, plus a crawl of staging after deploy using seeded sentinels.
+7. [ ] Backups (D-47):
+   - backup Worker: nightly database JSON export and media sync to B2 with Object Lock;
+   - failure email; `backup:verify` plus a weekly CI check;
+   - runbooks (BAK-07).
+8. [ ] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review.
+
+### Owner tasks for M1
+
+Claude gives click-by-click steps when each is needed.
+
+- [ ] O-05: Backblaze B2 account:
+  - TOTP 2FA, SMS fallback off, backup codes offline;
+  - two staging buckets with Object Lock and encryption;
+  - job key (write-and-lock, no delete), read-only verify key, break-glass key kept offline.
+- [ ] O-06 (part, moved to M1): enable Email Routing on the domain and verify the destination mailbox (D-47).
+- [ ] Exit test on iPhone: photograph, publish, view publicly, make private.
+
+### Not in M1
+
+- Tag rename/merge, filters, sorts and layouts (M3).
+- Video (M4).
+- Watermark and licensing (M5).
+- Edge caching and the domain move (M7, D-45).
 
 ### Done (M0)
 
