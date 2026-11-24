@@ -4,7 +4,7 @@
 
 ## M1 Core gallery (in progress)
 
-Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner is named only by a pen name, default Oddacious), the D-21/D-22/D-26 amendments, and this plan.
+Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner is named only by a pen name, currently Insignificant Nobody), the D-21/D-22/D-26 amendments, and this plan.
 
 **Exit criteria (§12):**
 
