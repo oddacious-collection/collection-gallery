@@ -1,6 +1,6 @@
 # Threat model (STRIDE) — SEC-01
 
-Living document: updated at the end of every milestone. Last update: **M0** (2026-11-13).
+Living document: updated at the end of every milestone. Last update: **M1 kickoff** (2026-11-23).
 
 ## System and trust boundaries
 
@@ -15,7 +15,12 @@ Living document: updated at the end of every milestone. Last update: **M0** (202
  GitHub Actions ──(API token)──▶ Cloudflare (deploy, migrate)
                 ──(service token)──▶ Access ──▶ public staging only (smoke, ZAP)
 
- Nightly backups (M1) ──▶ Backblaze B2 (Object Lock, write-no-delete key)
+ Owner browser: photo processing (decode, orient, strip ALL metadata, resize, encode)
+   ──▶ admin Worker ──▶ R2 (proxied upload, D-46; server re-verifies on finalize)
+
+ backup Worker (cron, no routes) ──▶ D1 (read) + R2 media-private (read)
+   ──(write-and-lock, no-delete key)──▶ Backblaze B2 (Object Lock, versioned)
+   ──(send_email, failures only)──▶ owner's verified mailbox
 ```
 
 | #   | Boundary                         | Crossing                       |
@@ -25,7 +30,8 @@ Living document: updated at the end of every milestone. Last update: **M0** (202
 | TB3 | Workers → D1 / R2                | Bindings (in-account)          |
 | TB4 | GitHub → Cloudflare              | CI deploy credentials          |
 | TB5 | Dependencies → build             | npm packages, GitHub Actions   |
-| TB6 | Cloudflare → B2                  | Backup credentials (M1)        |
+| TB6 | backup Worker → B2               | Backup credentials (M1, D-47)  |
+| TB7 | Owner device → admin Worker      | Uploaded media (M1)            |
 
 ## Assets
 
@@ -42,24 +48,27 @@ Status: ✅ mitigated in M0 · 🔜 planned (milestone) · ⚠️ accepted resid
 
 ### Spoofing
 
-| Threat                                                                   | Mitigation                                                                                                                                                             | Status                  |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Attacker reaches admin without being the owner                           | Access (GitHub IdP only, email policy, OTP disabled); Worker independently verifies JWT signature/iss/aud/exp/email on every request incl. assets (`run_worker_first`) | ✅ (D-22, D-29; TST-03) |
-| Forged or replayed `Cf-Access-Jwt-Assertion` sent straight to the Worker | RS256-only verification against team JWKS; `alg:none`, HS256 confusion, wrong key, expired, wrong aud/iss/email all rejected                                           | ✅ (`access.test.ts`)   |
-| Owner's GitHub account phished (password + TOTP fallback)                | Passkey sign-in, GitHub mandatory 2FA, recovery codes offline                                                                                                          | ⚠️ D-23                 |
-| Access service token misused                                             | Token only on **public staging** app; admin rejects tokens without the owner email                                                                                     | ✅ (D-24, smoke test)   |
-| Spoofed visitor actions (likes, contact)                                 | Rate limits, Turnstile, HMAC dedupe                                                                                                                                    | 🔜 M5/M6                |
+| Threat                                                                                            | Mitigation                                                                                                                                                                                                 | Status                          |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Attacker reaches admin without being the owner                                                    | Access (GitHub IdP only, email policy, OTP disabled); Worker independently verifies JWT signature/iss/aud/exp/email on every request incl. assets (`run_worker_first`)                                     | ✅ (D-22, D-29; TST-03)         |
+| Forged or replayed `Cf-Access-Jwt-Assertion` sent straight to the Worker                          | RS256-only verification against team JWKS; `alg:none`, HS256 confusion, wrong key, expired, wrong aud/iss/email all rejected                                                                               | ✅ (`access.test.ts`)           |
+| Owner's GitHub account phished (password + TOTP fallback)                                         | Passkey sign-in, GitHub mandatory 2FA, recovery codes offline                                                                                                                                              | ⚠️ D-23                         |
+| A custom domain attached to a Worker is public (Worker-level Access doesn't cover custom domains) | Rule: a hostname Access app must exist before any staging/admin custom domain is attached; staging stays on `workers.dev` in M1; smoke test checks anonymous requests are blocked on every configured host | ✅ rule (D-22 corrected), 🔜 M7 |
+| Access service token misused                                                                      | Token only on **public staging** app; admin rejects tokens without the owner email                                                                                                                         | ✅ (D-24, smoke test)           |
+| Spoofed visitor actions (likes, contact)                                                          | Rate limits, Turnstile, HMAC dedupe                                                                                                                                                                        | 🔜 M5/M6                        |
 
 ### Tampering
 
-| Threat                                      | Mitigation                                                                                                                                              | Status                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Cross-site request forgery against admin    | Non-GET + exact `Origin` + `Sec-Fetch-Site` + custom header; Astro `checkOrigin`                                                                        | ✅ (SEC-04 tests)                        |
-| Public Worker used to write data            | Public pipeline allows GET/HEAD only (M0); no admin routes/code in bundle                                                                               | ✅ (bundle check, ESLint boundary)       |
-| Malicious upload (polyglot, SVG, oversized) | Client re-encode + server magic-byte/size checks                                                                                                        | 🔜 M1 (MED-01–03)                        |
-| Supply-chain compromise (npm/Actions)       | Exact pins + lockfile + `npm ci`; 7-day release-age floor; install scripts blocked; Actions pinned to SHAs; Dependabot with cooldown; npm audit; CodeQL | ✅ (D-33)                                |
-| SQL injection                               | Drizzle parameterised queries only                                                                                                                      | ✅ (pattern), 🔜 enforced as model grows |
-| Stored XSS via descriptions                 | Restricted Markdown + allowlist sanitiser; strict CSP, no inline script                                                                                 | 🔜 M1 (SEC-06); CSP ✅                   |
+| Threat                                                   | Mitigation                                                                                                                                              | Status                                   |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Cross-site request forgery against admin                 | Non-GET + exact `Origin` + `Sec-Fetch-Site` + custom header; Astro `checkOrigin`                                                                        | ✅ (SEC-04 tests)                        |
+| Public Worker used to write data                         | Public pipeline allows GET/HEAD only (M0); no admin routes/code in bundle                                                                               | ✅ (bundle check, ESLint boundary)       |
+| Malicious upload (polyglot, SVG, oversized)              | Client re-encode + server magic-byte/size/dimension checks on finalize (owner-only uploads, INV-5)                                                      | 🔜 M1 (MED-01–03)                        |
+| Supply-chain compromise (npm/Actions)                    | Exact pins + lockfile + `npm ci`; 7-day release-age floor; install scripts blocked; Actions pinned to SHAs; Dependabot with cooldown; npm audit; CodeQL | ✅ (D-33)                                |
+| SQL injection                                            | Drizzle parameterised queries only                                                                                                                      | ✅ (pattern), 🔜 enforced as model grows |
+| WebAssembly WebP encoder in admin (`'wasm-unsafe-eval'`) | Admin only; scripts still `'self'`; exact-pinned, justified dependency; public CSP unchanged                                                            | 🔜 M1 (D-44)                             |
+| Backups destroyed with a stolen job key                  | Job key can't delete or bypass governance; Object Lock per object; break-glass key offline; separate backup Worker holds the key                        | 🔜 M1 (D-47, BAK-04/05)                  |
+| Stored XSS via descriptions                              | Restricted Markdown + allowlist sanitiser; strict CSP, no inline script                                                                                 | 🔜 M1 (SEC-06); CSP ✅                   |
 
 ### Repudiation
 
@@ -69,22 +78,24 @@ Status: ✅ mitigated in M0 · 🔜 planned (milestone) · ⚠️ accepted resid
 
 ### Information disclosure
 
-| Threat                                   | Mitigation                                                                                               | Status                             |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Private fields/items in public responses | Single public DAL selecting allowlisted fields; ESLint import boundary; bundle check; privacy-leak suite | ✅ DAL + boundary; 🔜 TST-02 in M1 |
-| Staging indexed or public                | Worker-level Access; `X-Robots-Tag: noindex`; robots disallow; preview URLs off                          | ✅                                 |
-| Preview/version URLs bypass Access       | `preview_urls: false` on every Worker; Worker-level Access covers previews anyway                        | ✅ (D-30)                          |
-| Stack traces / internals in errors       | Generic error bodies; structured logs without PII                                                        | ✅ (SEC-12 tests)                  |
-| IPs/PII in logs                          | Invocation logs disabled; app logs carry reasons only                                                    | ✅ (D-32)                          |
-| Secrets in repo                          | `.dev.vars` ignored; gitleaks in CI; GitHub secret scanning/push protection (public repo)                | ✅                                 |
-| Private media URL guessed                | ≥128-bit random keys; visibility check on serve                                                          | 🔜 M1 (MED-10)                     |
+| Threat                                                                           | Mitigation                                                                                                                            | Status                             |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Private fields/items in public responses                                         | Single public DAL selecting allowlisted fields; ESLint import boundary; bundle check; privacy-leak suite                              | ✅ DAL + boundary; 🔜 TST-02 in M1 |
+| Staging indexed or public                                                        | Worker-level Access; `X-Robots-Tag: noindex`; robots disallow; preview URLs off                                                       | ✅                                 |
+| Preview/version URLs bypass Access                                               | `preview_urls: false` on every Worker; Worker-level Access covers previews anyway                                                     | ✅ (D-30)                          |
+| Stack traces / internals in errors                                               | Generic error bodies; structured logs without PII                                                                                     | ✅ (SEC-12 tests)                  |
+| IPs/PII in logs                                                                  | Invocation logs disabled; app logs carry reasons only                                                                                 | ✅ (D-32)                          |
+| Secrets in repo                                                                  | `.dev.vars` ignored; gitleaks in CI; GitHub secret scanning/push protection (public repo)                                             | ✅                                 |
+| Photo metadata identifies the owner (GPS, serials, device, software, timestamps) | All metadata stripped on the device before upload; only creator and copyright written back; tests parse every output for EXIF/XMP/GPS | 🔜 M1 (D-43, MED-07, TST-05)       |
+| Owner's email address exposed via backup alerts                                  | Address stored as a Worker secret, never committed; Email Routing with no inbound rules; alert text has no collection data            | 🔜 M1 (D-47)                       |
+| Private media URL guessed                                                        | ≥128-bit random keys; visibility check on serve                                                                                       | 🔜 M1 (MED-10)                     |
 
 ### Denial of service / cost
 
-| Threat                     | Mitigation                                                                                                  | Status            |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------- |
-| Request floods run up cost | Cloudflare edge DDoS; Workers Paid included quotas; static assets served without invoking the public Worker | ✅ baseline       |
-| Expensive endpoints abused | Rate-limit bindings                                                                                         | 🔜 M1/M5 (SEC-11) |
+| Threat                                    | Mitigation                                                                                                  | Status            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------- |
+| Request floods run up cost                | Cloudflare edge DDoS; Workers Paid included quotas; static assets served without invoking the public Worker | ✅ baseline       |
+| Expensive endpoints abused (search in M1) | Rate-limit bindings (per location, approximate)                                                             | 🔜 M1/M5 (SEC-11) |
 
 ### Elevation of privilege
 
@@ -97,4 +108,5 @@ Status: ✅ mitigated in M0 · 🔜 planned (milestone) · ⚠️ accepted resid
 ## Residual risks and notes
 
 - D1 bindings are full read/write; the public Worker's read-only behaviour is enforced in code, not by the platform.
-- `workers.dev` staging can't exercise CDN cache purging; the domain must exist before M1 ends (D-21).
+- No edge caching until M7 (D-45). Every request is served live, so hiding an item takes effect immediately; caching with a TTL of 60 s or less arrives with the domain move.
+- Browsers that already displayed an image may keep it in their own cache after the item is hidden; nothing can revoke that. New requests are refused at once.
