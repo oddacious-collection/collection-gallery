@@ -8,15 +8,13 @@
  * Only the admin Worker may import this module.
  */
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
-import type { BatchItem } from 'drizzle-orm/batch';
-import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
+import { drizzle } from 'drizzle-orm/d1';
 import { z } from 'zod';
 import {
   ITEM_KINDS,
   ITEM_STATUSES,
   LICENSES,
   WATERMARK_OVERRIDES,
-  auditLog,
   categories,
   itemCategories,
   itemRevisions,
@@ -28,6 +26,7 @@ import {
 } from '../db/schema.ts';
 import { ulid } from '../ids.ts';
 import { slugify, uniqueSlug } from '../slug.ts';
+import { audit, run, type Db, type Op } from './db-util.ts';
 import { DomainError } from './domain-error.ts';
 import {
   IdList,
@@ -41,8 +40,6 @@ import {
 } from './validation.ts';
 
 export type ItemRow = typeof items.$inferSelect;
-type Db = DrizzleD1Database;
-type Op = BatchItem<'sqlite'>;
 
 // ------------------------------------------------------------------ helpers
 
@@ -61,12 +58,6 @@ function defined<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[K], und
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as {
     [K in keyof T]?: Exclude<T[K], undefined>;
   };
-}
-
-async function run(db: Db, ops: Op[]): Promise<void> {
-  const [first, ...rest] = ops;
-  if (!first) return;
-  await db.batch([first, ...rest]);
 }
 
 async function getRow(db: Db, id: string): Promise<ItemRow> {
@@ -188,15 +179,7 @@ function auditOp(
   details: Record<string, unknown>,
   at: string,
 ): Op {
-  return db.insert(auditLog).values({
-    id: ulid(),
-    at,
-    actorEmail: actor,
-    action,
-    targetType: 'item',
-    targetId,
-    details: JSON.stringify(details),
-  });
+  return audit(db, 'item', actor, action, targetId, details, at);
 }
 
 // ------------------------------------------------------------------ reads

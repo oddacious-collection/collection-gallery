@@ -1,0 +1,32 @@
+---
+/** Nested category checkboxes for the item editor (recursive). */
+import type { CategoryNode } from '@cg/core/admin';
+
+interface Props {
+  byParent: Map<string | null, CategoryNode[]>;
+  parentId: string | null;
+  selected: Set<string>;
+}
+const { byParent, parentId, selected } = Astro.props;
+const children = byParent.get(parentId) ?? [];
+---
+
+{children.length > 0 && (
+  <ul class="checks tree">
+    {children.map((c) => (
+      <li>
+        <label class="inline">
+          <input
+            type="checkbox"
+            name="categoryIds"
+            value={c.id}
+            data-type="checks"
+            checked={selected.has(c.id)}
+          />
+          {c.name}
+        </label>
+        <Astro.self byParent={byParent} parentId={c.id} selected={selected} />
+      </li>
+    ))}
+  </ul>
+)}

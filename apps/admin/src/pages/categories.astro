@@ -1,0 +1,55 @@
+---
+import { env } from 'cloudflare:workers';
+import { listCategoryTree, type CategoryNode } from '@cg/core/admin';
+import Admin from '../layouts/Admin.astro';
+import CategoryTree from '../components/CategoryTree.astro';
+
+const all = await listCategoryTree(env.DB);
+const byParent = new Map<string | null, CategoryNode[]>();
+for (const node of all) {
+  const list = byParent.get(node.parentId) ?? [];
+  list.push(node);
+  byParent.set(node.parentId, list);
+}
+// Each category's own subtree (itself included): it can't be moved into any of these.
+const subtree = new Map<string, Set<string>>();
+const collect = (id: string): Set<string> => {
+  const set = new Set<string>([id]);
+  for (const child of byParent.get(id) ?? []) for (const d of collect(child.id)) set.add(d);
+  subtree.set(id, set);
+  return set;
+};
+for (const root of byParent.get(null) ?? []) collect(root.id);
+---
+
+<Admin title="Categories · Admin">
+  <h1>Categories</h1>
+  <p class="hint">
+    Each category has one parent; nest as deep as you like. An item can be in several categories,
+    and it also shows up in every parent category above them.
+  </p>
+  <form class="card" data-api="/api/categories" data-method="POST">
+    <label for="new-top">New top-level category</label>
+    <input
+      id="new-top"
+      name="name"
+      type="text"
+      required
+      maxlength="100"
+      placeholder="e.g. Rocks & Minerals"
+    />
+    <p data-api-message role="status"></p>
+    <div class="actions">
+      <button class="primary" type="submit">
+        Add category
+      </button>
+    </div>
+  </form>
+  {all.length === 0 ? (
+    <p class="muted">No categories yet.</p>
+  ) : (
+    <section class="card">
+      <CategoryTree byParent={byParent} parentId={null} all={all} subtree={subtree} />
+    </section>
+  )}
+</Admin>

@@ -12,7 +12,11 @@ beforeAll(async () => {
   issuer = await createIssuer();
 });
 
-function pipeline(app = vi.fn(async () => new Response('admin ok'))) {
+function pipeline(
+  app: ReturnType<typeof vi.fn<(req: Request) => Promise<Response>>> = vi.fn(
+    async (_req: Request) => new Response('admin ok'),
+  ),
+) {
   return { app, handler: createAdminPipeline(app, { keys: issuer.keys }) };
 }
 
@@ -28,6 +32,19 @@ async function send(
 }
 
 describe('admin pipeline', () => {
+  it('passes the verified email to the app and ignores a spoofed actor header', async () => {
+    let seen: string | null = null;
+    const { handler } = pipeline(
+      vi.fn(async (req: Request) => {
+        seen = req.headers.get('x-cg-actor');
+        return new Response('ok');
+      }),
+    );
+    const res = await send(handler, { headers: { 'x-cg-actor': 'attacker@example.test' } });
+    expect(res.status).toBe(200);
+    expect(seen).toBe('owner@example.test');
+  });
+
   it('serves an authenticated GET with security headers and no caching', async () => {
     const { app, handler } = pipeline();
     const res = await send(handler);

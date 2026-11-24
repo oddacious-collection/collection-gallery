@@ -1,0 +1,42 @@
+// `astro dev` ONLY (selected in astro.config.mjs). Never deployed: it has no
+// environments, workers_dev off and no routes.
+//
+// Same local bindings and values as the top level of wrangler.jsonc, except
+// `run_worker_first` is off: with it on, the Vite dev server can't serve its
+// own modules and styles (/@vite/client, /src/...), because every request is
+// sent to the Worker. That's harmless here because the dev pipeline (D-35)
+// only answers on loopback hosts in the local environment. Builds, the e2e
+// tests (which check that assets need a token), staging and production all use
+// wrangler.jsonc with `run_worker_first: true` (SEC-03).
+//
+// Keep the bindings and vars in step with wrangler.jsonc.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "cg-admin-dev",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-28",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": { "run_worker_first": false },
+  "vars": {
+    "ENVIRONMENT": "local",
+    "ADMIN_ORIGIN": "http://localhost:4322",
+    "PUBLIC_ORIGIN": "http://localhost:4321",
+    "OWNER_NAME": "Insignificant Nobody",
+    "ACCESS_TEAM_DOMAIN": "https://local-dev.cloudflareaccess.com",
+    "ACCESS_AUD": "0000000000000000000000000000000000000000000000000000000000000000",
+    "ADMIN_EMAIL": "owner@example.com",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cg-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/core/migrations",
+    },
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-local" },
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "cg-media-private-local" },
+  ],
+}

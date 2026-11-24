@@ -5,4 +5,8 @@
   "compatibility_date": "2026-10-28",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [{ "binding": "DB", "database_name": "cg-test", "database_id": "test" }],
+  "r2_buckets": [
+    { "binding": "MEDIA_PUBLIC", "bucket_name": "cg-test-media-public" },
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "cg-test-media-private" },
+  ],
 }

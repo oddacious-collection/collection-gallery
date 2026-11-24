@@ -1,0 +1,101 @@
+---
+import { env } from 'cloudflare:workers';
+import { listItems, type ListItemsOptions } from '@cg/core/admin';
+import Admin from '../../layouts/Admin.astro';
+import { STATUS_LABEL, shortDateTime } from '../../lib/format.ts';
+
+const VIEWS = ['all', 'draft', 'public', 'private', 'wishlist', 'trash'] as const;
+type View = (typeof VIEWS)[number];
+const requested = Astro.url.searchParams.get('view') ?? 'all';
+const view: View = (VIEWS as readonly string[]).includes(requested) ? (requested as View) : 'all';
+
+const opts: ListItemsOptions = { limit: 200 };
+if (view === 'trash') opts.trashed = true;
+else if (view === 'wishlist') opts.kind = 'wishlist';
+else if (view !== 'all') opts.status = view;
+
+const rows = await listItems(env.DB, opts);
+const labels: Record<View, string> = {
+  all: 'All',
+  draft: 'Drafts',
+  public: 'Public',
+  private: 'Private',
+  wishlist: 'Wishlist',
+  trash: 'Trash',
+};
+---
+
+<Admin title={`${labels[view]} · Admin`}>
+  <h1>{view === 'trash' ? 'Trash' : 'Items'}</h1>
+  <nav class="filters" aria-label="Filter items">
+    {VIEWS.map((v) => (
+      <a
+        href={v === 'all' ? '/items' : `/items?view=${v}`}
+        aria-current={v === view ? 'page' : undefined}
+      >
+        {labels[v]}
+      </a>
+    ))}
+  </nav>
+  {view === 'trash' && (
+    <p class="hint">
+      Items in the trash are hidden everywhere. They're deleted for good after 30 days.
+    </p>
+  )}
+  {rows.length === 0 ? (
+    <p class="muted">
+      Nothing here yet. {view !== 'trash' && <a href="/items/new">Create an item</a>}
+    </p>
+  ) : (
+    <ul class="item-list">
+      {rows.map((item) => (
+        <li>
+          <span class="title">
+            <a href={`/items/${item.id}`}>{item.title}</a>
+          </span>
+          {item.kind === 'wishlist' ? (
+            <span class="badge wishlist">Wishlist</span>
+          ) : (
+            <span class={`badge ${item.status}`}>{STATUS_LABEL[item.status]}</span>
+          )}
+          <span class="hint">{shortDateTime(item.updatedAt)}</span>
+          {view === 'trash' ? (
+            <>
+              <button
+                class="small"
+                data-api={`/api/items/${item.id}/trash`}
+                data-body='{"trashed":false}'
+              >
+                Restore
+              </button>
+              <button
+                class="small danger"
+                data-api={`/api/items/${item.id}`}
+                data-method="DELETE"
+                data-confirm={`Delete "${item.title}" permanently, with its photos? This can't be undone here (backups keep a copy for a limited time).`}
+              >
+                Delete permanently
+              </button>
+            </>
+          ) : item.kind === 'owned' && item.status === 'public' ? (
+            <button
+              class="small"
+              data-api={`/api/items/${item.id}/status`}
+              data-body='{"status":"private"}'
+            >
+              Make private
+            </button>
+          ) : item.kind === 'owned' ? (
+            <button
+              class="small primary"
+              data-api={`/api/items/${item.id}/status`}
+              data-body='{"status":"public"}'
+            >
+              Publish
+            </button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  )}
+</Admin>

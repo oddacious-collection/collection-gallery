@@ -20,7 +20,7 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - migrations, including the admin-only `source_caption` and hashtag suggestions (D-42);
    - ULIDs, slugs with redirects, revision snapshots, audit log, Zod schemas;
    - public and admin data-access layers.
-3. [ ] Admin items:
+3. [x] Admin items (unit tests 106 → 115; reorder/move via buttons, D-50):
    - create, edit, publish, Public/Private toggle;
    - trash with restore and 30-day auto-purge;
    - revision history with diff and restore;

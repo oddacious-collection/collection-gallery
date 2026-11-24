@@ -18,6 +18,9 @@ export { verifyAccessRequest, accessKeySet, ACCESS_JWT_HEADER } from './access.t
 export { AdminConfigSchema, type AdminConfig } from './config.ts';
 export type { AccessResult, AccessFailure, AccessVerifyOptions } from './access.ts';
 export * from './items.ts';
+export * from './categories.ts';
+export * from './purge.ts';
+export { api, json, readJson, MAX_JSON_BYTES } from './http.ts';
 export { DomainError, type DomainErrorCode } from './domain-error.ts';
 export {
   ItemCreate,
@@ -25,6 +28,20 @@ export {
   type ItemCreateInput,
   type ItemUpdateInput,
 } from './validation.ts';
+
+/**
+ * Internal header carrying the verified owner email from the pipeline to the
+ * app (for the audit log, SEC-13). The pipeline always overwrites it, so a
+ * client-supplied value never reaches the app.
+ */
+export const ACTOR_HEADER = 'x-cg-actor';
+
+/** The verified actor for an admin request (set by the pipeline). */
+export function actorOf(request: Request): string {
+  const actor = request.headers.get(ACTOR_HEADER);
+  if (!actor) throw new Error('actorOf: request did not pass the admin pipeline');
+  return actor;
+}
 
 /** Custom header that admin client code sends on every state-changing request. */
 export const CSRF_HEADER = 'x-cg-request';
@@ -85,8 +102,12 @@ export function createAdminPipeline<Env extends object>(
       return deny(403, 'csrf');
     }
 
+    // Pass the verified identity on; never trust a client-supplied value.
+    const forwarded = new Request(request);
+    forwarded.headers.set(ACTOR_HEADER, auth.email);
+
     try {
-      return withSecurityHeaders(await app(request, env, ctx), headerOpts);
+      return withSecurityHeaders(await app(forwarded, env, ctx), headerOpts);
     } catch {
       logEvent('error', 'admin_unhandled_error', { method: request.method });
       return withSecurityHeaders(errorResponse(500), headerOpts);

@@ -1,0 +1,331 @@
+---
+import { env } from 'cloudflare:workers';
+import {
+  DomainError,
+  getItem,
+  listCategoryTree,
+  publishBlockers,
+  type CategoryNode,
+} from '@cg/core/admin';
+import Admin from '../../../layouts/Admin.astro';
+import CategoryChecks from '../../../components/CategoryChecks.astro';
+import { LICENSE_LABEL, STATUS_LABEL, centsToInput, shortDateTime } from '../../../lib/format.ts';
+
+const id = String(Astro.params['id']);
+let item;
+try {
+  item = await getItem(env.DB, id);
+} catch (err) {
+  if (err instanceof DomainError && err.code === 'not_found') {
+    return new Response(null, { status: 404 });
+  }
+  throw err;
+}
+const [tree, blockers] = await Promise.all([listCategoryTree(env.DB), publishBlockers(env.DB, id)]);
+const byParent = new Map<string | null, CategoryNode[]>();
+for (const node of tree) {
+  const list = byParent.get(node.parentId) ?? [];
+  list.push(node);
+  byParent.set(node.parentId, list);
+}
+const selected = new Set(item.categoryIds);
+const trashed = item.deletedAt !== null;
+const isPublic = item.status === 'public' && item.kind === 'owned' && !trashed;
+const suggestions: string[] = item.suggestedTags
+  ? (JSON.parse(item.suggestedTags) as string[])
+  : [];
+const unusedSuggestions = suggestions.filter(
+  (s) => !item.tagNames.some((t) => t.toLowerCase() === s.toLowerCase()),
+);
+const REASON: Record<string, string> = {
+  needs_category: 'Add at least one category.',
+  needs_media: 'Add at least one photo (photo uploads arrive in the next step).',
+  wishlist: 'Wishlist items can never be public.',
+  in_trash: 'Restore it from the trash first.',
+};
+---
+
+<Admin title={`${item.title} · Admin`}>
+  <p>
+    <a href="/items">← Items</a>
+  </p>
+  <h1>{item.title}</h1>
+
+  <section class={`card status-box ${isPublic ? 'public' : ''}`} aria-labelledby="visibility">
+    <h2 id="visibility">
+      Visibility:{' '}
+      {trashed ? (
+        <span class="badge trash">In trash</span>
+      ) : item.kind === 'wishlist' ? (
+        <span class="badge wishlist">Wishlist</span>
+      ) : (
+        <span class={`badge ${item.status}`}>{STATUS_LABEL[item.status]}</span>
+      )}
+    </h2>
+    <p class="hint">
+      {isPublic
+        ? `Visible to everyone. First published ${shortDateTime(item.postedAt)}.`
+        : 'Only you can see this item.'}
+    </p>
+    {!isPublic && blockers.length > 0 && (
+      <ul>
+        {blockers.map((b) => (
+          <li>{REASON[b] ?? b}</li>
+        ))}
+      </ul>
+    )}
+    {!isPublic && blockers.length === 0 && (
+      <p class="hint">
+        Before publishing: check alt text, and that no faces, addresses, receipts or other personal
+        details are visible in the photos.
+      </p>
+    )}
+    {!trashed && item.kind === 'owned' && (
+      <div class="actions">
+        {isPublic ? (
+          <button
+            class="primary"
+            data-api={`/api/items/${id}/status`}
+            data-body='{"status":"private"}'
+          >
+            Make private
+          </button>
+        ) : (
+          <button
+            class="primary"
+            data-api={`/api/items/${id}/status`}
+            data-body='{"status":"public"}'
+            disabled={blockers.length > 0}
+          >
+            Publish
+          </button>
+        )}
+        {item.status !== 'draft' && (
+          <button data-api={`/api/items/${id}/status`} data-body='{"status":"draft"}'>
+            Back to draft
+          </button>
+        )}
+      </div>
+    )}
+  </section>
+
+  <form class="card" data-api={`/api/items/${id}`} data-method="PATCH">
+    <h2>Details</h2>
+    <label for="title">Title</label>
+    <input id="title" name="title" type="text" required maxlength="200" value={item.title} />
+    <label for="description">Description</label>
+    <textarea
+      id="description"
+      name="description"
+      maxlength="20000"
+      set:text={item.description}
+    ></textarea>
+    <p class="hint">
+      Plain text with simple formatting: *italic*, **bold**, lists, links, ## headings.
+    </p>
+    <div class="row">
+      <div>
+        <label for="slug">URL name</label>
+        <input
+          id="slug"
+          name="slug"
+          type="text"
+          maxlength="80"
+          pattern="[a-z0-9]+(-[a-z0-9]+)*"
+          value={item.slug}
+        />
+        <p class="hint">Changing it keeps the old link working.</p>
+      </div>
+      <div>
+        <label for="postedAt">Posted at (UTC)</label>
+        <input
+          id="postedAt"
+          name="postedAt"
+          type="text"
+          data-type="nullable"
+          placeholder="2026-11-23T19:04:00.000Z"
+          value={item.postedAt ?? ''}
+        />
+        <p class="hint">Set automatically on first publish.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="kind">Kind</label>
+        <select id="kind" name="kind">
+          <option value="owned" selected={item.kind === 'owned'}>
+            In my collection
+          </option>
+          <option value="wishlist" selected={item.kind === 'wishlist'}>
+            Wishlist (never public)
+          </option>
+        </select>
+      </div>
+      <div>
+        <label for="licenseOverride">License</label>
+        <select id="licenseOverride" name="licenseOverride" data-type="nullable">
+          <option value="" selected={item.licenseOverride === null}>
+            Inherit from category / site
+          </option>
+          {Object.entries(LICENSE_LABEL).map(([value, label]) => (
+            <option value={value} selected={item.licenseOverride === value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label for="watermarkOverride">Watermark</label>
+        <select id="watermarkOverride" name="watermarkOverride">
+          <option value="inherit" selected={item.watermarkOverride === 'inherit'}>
+            Site setting
+          </option>
+          <option value="on" selected={item.watermarkOverride === 'on'}>
+            On
+          </option>
+          <option value="off" selected={item.watermarkOverride === 'off'}>
+            Off
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <h2>
+      Private records <span class="hint">(never shown publicly)</span>
+    </h2>
+    <div class="row">
+      <div>
+        <label for="purchasePriceCents">Purchase price</label>
+        <input
+          id="purchasePriceCents"
+          name="purchasePriceCents"
+          type="text"
+          inputmode="decimal"
+          data-type="cents"
+          value={centsToInput(item.purchasePriceCents)}
+        />
+      </div>
+      <div>
+        <label for="purchaseCurrency">Currency</label>
+        <input
+          id="purchaseCurrency"
+          name="purchaseCurrency"
+          type="text"
+          maxlength="3"
+          data-type="nullable"
+          placeholder="USD"
+          value={item.purchaseCurrency ?? ''}
+        />
+      </div>
+      <div>
+        <label for="purchaseDate">Purchase date</label>
+        <input
+          id="purchaseDate"
+          name="purchaseDate"
+          type="date"
+          data-type="nullable"
+          value={item.purchaseDate ?? ''}
+        />
+      </div>
+    </div>
+    <label class="inline">
+      <input type="checkbox" name="openToParting" data-type="bool" checked={item.openToParting} />
+      Open to parting with
+    </label>
+    <p data-api-message role="status"></p>
+    <div class="actions">
+      <button class="primary" type="submit">
+        Save details
+      </button>
+    </div>
+  </form>
+
+  <form class="card" data-api={`/api/items/${id}/categories`} data-method="PUT">
+    <h2>Categories</h2>
+    {tree.length === 0 ? (
+      <p class="muted">
+        No categories yet. <a href="/categories">Create some</a>.
+      </p>
+    ) : (
+      <CategoryChecks byParent={byParent} parentId={null} selected={selected} />
+    )}
+    <p class="hint">The item also appears in every parent category's listings.</p>
+    <p data-api-message role="status"></p>
+    <div class="actions">
+      <button type="submit">Save categories</button>
+    </div>
+  </form>
+
+  <form class="card" data-api={`/api/items/${id}/tags`} data-method="PUT">
+    <h2>Tags</h2>
+    <label for="tags">Tags, separated by commas</label>
+    <input id="tags" name="tags" type="text" data-type="list" value={item.tagNames.join(', ')} />
+    {unusedSuggestions.length > 0 && (
+      <>
+        <p class="hint">
+          Hashtags from the original Instagram post (private suggestions; click to add):
+        </p>
+        <div class="suggestions">
+          {unusedSuggestions.map((s) => (
+            <button
+              type="button"
+              class="small"
+              data-api={`/api/items/${id}/tags`}
+              data-method="PUT"
+              data-body={JSON.stringify({ tags: [...item.tagNames, s] })}
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      </>
+    )}
+    <p data-api-message role="status"></p>
+    <div class="actions">
+      <button type="submit">Save tags</button>
+    </div>
+  </form>
+
+  <section class="card">
+    <h2>Photos</h2>
+    <p class="muted">
+      {item.mediaCount} photo{item.mediaCount === 1 ? '' : 's'}. Uploading arrives in the next build
+      step.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>History and trash</h2>
+    <p>
+      <a href={`/items/${id}/revisions`}>Revision history</a> · Created{' '}
+      {shortDateTime(item.createdAt)}
+    </p>
+    <div class="actions">
+      {trashed ? (
+        <>
+          <button data-api={`/api/items/${id}/trash`} data-body='{"trashed":false}'>
+            Restore from trash
+          </button>
+          <button
+            class="danger"
+            data-api={`/api/items/${id}`}
+            data-method="DELETE"
+            data-then="redirect:/items?view=trash"
+            data-confirm="Delete this item permanently, with its photos? This can't be undone here (backups keep a copy for a limited time)."
+          >
+            Delete permanently
+          </button>
+        </>
+      ) : (
+        <button
+          class="danger"
+          data-api={`/api/items/${id}/trash`}
+          data-body='{"trashed":true}'
+          data-confirm="Move this item to the trash? It disappears from the public site at once, and you can restore it for 30 days."
+        >
+          Move to trash
+        </button>
+      )}
+    </div>
+  </section>
+</Admin>
