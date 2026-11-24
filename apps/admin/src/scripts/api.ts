@@ -145,6 +145,8 @@ async function send(
       showMessage(scope, describeError(res.status, data), false);
       return;
     }
+    // A saved form has no unsaved changes any more.
+    if (el instanceof HTMLFormElement) delete el.dataset['dirty'];
     const then = el.dataset['then'] ?? 'reload';
     if (then.startsWith('redirect:')) {
       window.location.assign(fill(then.slice('redirect:'.length), data));
@@ -159,6 +161,24 @@ async function send(
     el.removeAttribute('aria-busy');
   }
 }
+
+// Unsaved changes: typing in or ticking a field of an API form marks it
+// "dirty" until it is saved, and leaving the page then asks first.
+function markDirty(event: Event): void {
+  const field = event.target;
+  if (!(field instanceof HTMLElement) || !field.getAttribute('name')) return;
+  const form = field.closest<HTMLFormElement>('form[data-api]');
+  if (form) form.dataset['dirty'] = '1';
+}
+document.addEventListener('input', markDirty);
+document.addEventListener('change', markDirty);
+window.addEventListener('beforeunload', (event) => {
+  if (document.querySelector('form[data-api][data-dirty]')) {
+    event.preventDefault();
+    // Older Safari needs returnValue set to show the prompt.
+    event.returnValue = '';
+  }
+});
 
 document.addEventListener('submit', (event) => {
   const form = event.target;

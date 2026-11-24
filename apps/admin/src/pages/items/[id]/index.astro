@@ -78,9 +78,9 @@ const REASON: Record<string, string> = {
         : 'Only you can see this item.'}
     </p>
     {!isPublic && blockers.length > 0 && (
-      <ul>
+      <ul data-blockers>
         {blockers.map((b) => (
-          <li>{REASON[b] ?? b}</li>
+          <li data-blocker={b}>{REASON[b] ?? b}</li>
         ))}
       </ul>
     )}
@@ -106,6 +106,7 @@ const REASON: Record<string, string> = {
             data-api={`/api/items/${id}/status`}
             data-body='{"status":"public"}'
             disabled={blockers.length > 0}
+            data-publish
           >
             Publish
           </button>
@@ -250,20 +251,62 @@ const REASON: Record<string, string> = {
     </div>
   </form>
 
-  <form class="card" data-api={`/api/items/${id}/categories`} data-method="PUT">
+  <form
+    class="card"
+    data-api={`/api/items/${id}/categories`}
+    data-method="PUT"
+    data-category-form
+    data-item-id={id}
+  >
     <h2>Categories</h2>
     {tree.length === 0 ? (
-      <p class="muted">
-        No categories yet. <a href="/categories">Create some</a>.
-      </p>
+      <>
+        <p class="muted" data-no-categories>
+          No categories yet. Create the first one below.
+        </p>
+        <ul class="checks tree" data-category-root></ul>
+      </>
     ) : (
-      <CategoryChecks byParent={byParent} parentId={null} selected={selected} />
+      <div data-category-root-wrap>
+        <CategoryChecks byParent={byParent} parentId={null} selected={selected} />
+      </div>
     )}
     <p class="hint">The item also appears in every parent category's listings.</p>
     <p data-api-message role="status"></p>
     <div class="actions">
       <button type="submit">Save categories</button>
     </div>
+
+    <details class="new-category" data-new-category open={tree.length === 0}>
+      <summary>+ New category</summary>
+      <div class="row">
+        <div>
+          <label for="new-category-name">Name</label>
+          <input id="new-category-name" type="text" maxlength="100" autocomplete="off" />
+        </div>
+        <div>
+          <label for="new-category-parent">Inside</label>
+          <select id="new-category-parent">
+            <option value="">(top level)</option>
+            {tree.map((c) => (
+              <option value={c.id} data-depth={c.depth}>
+                {`${' '.repeat(c.depth)}${c.name}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <p class="hint">
+        Creates the category and adds this item to it straight away. Rename, move or reorder
+        categories later on the <a href="/categories">Categories</a> page.
+      </p>
+      <p data-new-category-message role="status"></p>
+      <div class="actions">
+        <button type="button" data-new-category-create>
+          Create and add
+        </button>
+      </div>
+    </details>
   </form>
 
   <form class="card" data-api={`/api/items/${id}/tags`} data-method="PUT">
@@ -445,4 +488,5 @@ const REASON: Record<string, string> = {
 
 <script>
   import '../../../scripts/photos/upload.ts';
+  import '../../../scripts/new-category.ts';
 </script>
