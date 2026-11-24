@@ -184,3 +184,18 @@ describe('revisions (ADM-05)', () => {
     expect(JSON.parse(row?.details ?? '{}')).toEqual({ changed: ['title'] });
   });
 });
+
+describe('purchase currency (D-57)', () => {
+  it('stores USD for a price given without a currency, on create and on edit', async () => {
+    const a = await createItem(env.DB, { title: 'Priced', purchasePriceCents: 4200 }, ACTOR);
+    expect(a.purchaseCurrency).toBe('USD');
+    const b = await createItem(env.DB, { title: 'Unpriced' }, ACTOR);
+    expect(b.purchaseCurrency).toBeNull();
+    const edited = await updateItem(env.DB, b.id, { purchasePriceCents: 1999 }, ACTOR);
+    expect(edited.purchaseCurrency).toBe('USD');
+    const row = await env.DB.prepare('SELECT purchase_currency FROM items WHERE id = ?')
+      .bind(b.id)
+      .first<{ purchase_currency: string }>();
+    expect(row?.purchase_currency).toBe('USD');
+  });
+});
