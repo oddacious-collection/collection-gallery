@@ -22,7 +22,7 @@
   "vars": {
     "ENVIRONMENT": "local",
     "PUBLIC_ORIGIN": "http://localhost:4321",
-    "OWNER_NAME": "Collection owner",
+    "OWNER_NAME": "Insignificant Nobody",
   },
   "d1_databases": [
     {
@@ -46,7 +46,7 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "PUBLIC_ORIGIN": "SET_AT_DEPLOY",
-        "OWNER_NAME": "Collection owner",
+        "OWNER_NAME": "Insignificant Nobody",
       },
       "d1_databases": [
         {

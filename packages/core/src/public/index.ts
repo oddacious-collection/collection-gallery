@@ -20,6 +20,14 @@ import { settings } from '../db/schema.ts';
 
 // ---------------------------------------------------------------- data access
 
+export {
+  getPublicItemBySlug,
+  listPublicItems,
+  type PublicItem,
+  type PublicItemLookup,
+  type PublicItemPage,
+} from './items.ts';
+
 /** Settings keys that may appear on public pages. Everything else is admin-only. */
 export const PUBLIC_SETTING_KEYS = ['owner_name', 'default_license'] as const;
 export type PublicSettingKey = (typeof PUBLIC_SETTING_KEYS)[number];

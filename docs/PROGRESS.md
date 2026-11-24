@@ -16,7 +16,7 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
 ### Plan (one PR per step; each goes through CI and staging)
 
 1. [ ] Kickoff docs: decisions D-42 to D-48, the D-22 correction, the threat model and this plan.
-2. [ ] Data model, all of §4:
+2. [x] Data model, all of §4 (unit tests 80 → 106):
    - migrations, including the admin-only `source_caption` and hashtag suggestions (D-42);
    - ULIDs, slugs with redirects, revision snapshots, audit log, Zod schemas;
    - public and admin data-access layers.
