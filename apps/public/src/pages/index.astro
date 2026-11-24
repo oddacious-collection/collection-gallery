@@ -58,7 +58,16 @@ const description = `${owner}'s collection of collections.`;
   )}
 
   <section aria-labelledby="recent-h">
-    <h2 id="recent-h">Recently posted</h2>
+    <div class="list-head">
+      <h2 id="recent-h" class="list-count">
+        Recently posted
+      </h2>
+      {recent.cards.length > 0 && (
+        <a class="button-link" href="/items">
+          Scroll through everything ↓
+        </a>
+      )}
+    </div>
     {recent.cards.length === 0 ? (
       <p class="muted">Nothing posted yet.</p>
     ) : (
@@ -66,7 +75,7 @@ const description = `${owner}'s collection of collections.`;
         <CardGrid cards={recent.cards} context={{ kind: 'all' }} eagerCount={4} />
         {recent.total > RECENT && (
           <p>
-            <a href="/items">All {recent.total} items →</a>
+            <a href="/items?view=grid">All {recent.total} items as a grid →</a>
           </p>
         )}
       </>

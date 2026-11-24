@@ -1,14 +1,15 @@
 ---
 /**
- * A category (PUB-07): breadcrumbs, subcategories, and its items, including
- * those in subcategories (toggle with ?sub=0). Categories without any public
- * item give the standard 404.
+ * A category (PUB-07): breadcrumbs, subcategories (compact buttons), and its
+ * items, including those in subcategories (toggle with ?sub=0). Items show as
+ * the vertical feed by default, or as a grid (?view=grid); owner feedback
+ * 2026-11-24. Categories without any public item give the standard 404.
  */
 import { env } from 'cloudflare:workers';
 import {
-  categoryCovers,
   categoryTrail,
   listContextCards,
+  listContextItems,
   listPublicCategories,
   markdownToText,
   renderMarkdown,
@@ -16,9 +17,17 @@ import {
 } from '@cg/core/public';
 import Base from '../../layouts/Base.astro';
 import CardGrid from '../../components/CardGrid.astro';
+import FeedList from '../../components/FeedList.astro';
 import Pager from '../../components/Pager.astro';
-import Photo from '../../components/Photo.astro';
-import { PAGE_SIZE, pageFromUrl } from '../../lib/context.ts';
+import ViewSwitch from '../../components/ViewSwitch.astro';
+import {
+  FEED_PAGE_SIZE,
+  PAGE_SIZE,
+  contextQuery,
+  pageFromUrl,
+  viewFromUrl,
+} from '../../lib/context.ts';
+import { mediaUrl } from '../../lib/images.ts';
 
 const slug = String(Astro.params['slug']);
 const all = await listPublicCategories(env.DB);
@@ -27,18 +36,23 @@ if (!category) return new Response(null, { status: 404 });
 
 const descendants = Astro.url.searchParams.get('sub') !== '0';
 const context: ListContext = { kind: 'category', slug, descendants };
+const view = viewFromUrl(Astro.url, 'feed');
 const page = pageFromUrl(Astro.url);
+const size = view === 'feed' ? FEED_PAGE_SIZE : PAGE_SIZE;
+const offset = (page - 1) * size;
 const children = all.filter((c) => c.parentSlug === slug);
-const [list, covers] = await Promise.all([
-  listContextCards(env.DB, context, (page - 1) * PAGE_SIZE, PAGE_SIZE),
-  categoryCovers(
-    env.DB,
-    children.map((c) => c.slug),
-  ),
-]);
-if (list.cards.length === 0 && page > 1) return new Response(null, { status: 404 });
+
+const grid = view === 'grid' ? await listContextCards(env.DB, context, offset, size) : null;
+const feed = view === 'feed' ? await listContextItems(env.DB, context, offset, size) : null;
+const total = grid?.total ?? feed?.total ?? 0;
+const shown = grid?.cards.length ?? feed?.items.length ?? 0;
+if (shown === 0 && page > 1) return new Response(null, { status: 404 });
+
+const og = grid?.cards[0]?.cover?.og ?? feed?.items[0]?.media[0]?.og ?? null;
+const ogAlt = grid?.cards[0]?.cover?.alt ?? feed?.items[0]?.media[0]?.alt ?? category.name;
 const trail = categoryTrail(all, slug);
 const self = `/category/${encodeURIComponent(slug)}`;
+const keep = view === 'grid' ? '?view=grid' : '';
 const description = category.description
   ? markdownToText(category.description)
   : `${category.name}: ${category.itemCount} item${category.itemCount === 1 ? '' : 's'}.`;
@@ -48,21 +62,15 @@ const description = category.description
   title={category.name}
   description={description}
   canonical={self}
-  image={
-    list.cards[0]?.cover?.og
-      ? {
-          url: `/media/${list.cards[0].cover.og.key}`,
-          width: list.cards[0].cover.og.width,
-          height: list.cards[0].cover.og.height,
-          alt: list.cards[0].cover.alt,
-        }
-      : null
-  }
+  image={og ? { url: mediaUrl(og.key), width: og.width, height: og.height, alt: ogAlt } : null}
 >
   <nav class="breadcrumbs" aria-label="Breadcrumb">
     <ol>
       <li>
         <a href="/">Home</a>
+      </li>
+      <li>
+        <a href="/collections">Collections</a>
       </li>
       {trail.map((step, i) => (
         <li>
@@ -79,55 +87,56 @@ const description = category.description
   {category.description && <div class="prose" set:html={renderMarkdown(category.description)} />}
 
   {children.length > 0 && (
-    <section aria-labelledby="sub-h">
-      <h2 id="sub-h">Subcategories</h2>
-      <ul class="card-grid small">
-        {children.map((c) => {
-          const cover = covers.get(c.slug);
-          return (
-            <li class="card">
-              <a href={`/category/${encodeURIComponent(c.slug)}`}>
-                {cover ? (
-                  <Photo
-                    image={{ ...cover, alt: '' }}
-                    sizes="(min-width: 40rem) 12rem, 33vw"
-                    class="card-img"
-                  />
-                ) : (
-                  <span class="card-img card-empty" aria-hidden="true" />
-                )}
-                <span class="card-title">{c.name}</span>
-                <span class="card-meta">{c.itemCount}</span>
-              </a>
-            </li>
-          );
-        })}
+    <nav class="chips" aria-label="Subcategories">
+      <ul>
+        {children.map((c) => (
+          <li>
+            <a href={`/category/${encodeURIComponent(c.slug)}${keep}`}>
+              {c.name} <span class="chip-count">{c.itemCount}</span>
+            </a>
+          </li>
+        ))}
       </ul>
-    </section>
+    </nav>
   )}
 
   <section aria-labelledby="items-h">
-    <h2 id="items-h">Items</h2>
+    <div class="list-head">
+      <h2 id="items-h" class="list-count">
+        {total} item{total === 1 ? '' : 's'}
+        {children.length > 0 &&
+          (descendants ? ', including subcategories' : ' filed directly here')}
+      </h2>
+      <ViewSwitch view={view} defaultView="feed" />
+    </div>
     {children.length > 0 && (
-      <p class="muted">
+      <p class="muted small">
         {descendants ? (
-          <>
-            {list.total} item{list.total === 1 ? '' : 's'}, including subcategories.{' '}
-            <a href={`${self}?sub=0`}>Only items filed directly here</a>
-          </>
+          <a href={`${self}?sub=0${view === 'grid' ? '&view=grid' : ''}`}>
+            Only items filed directly here
+          </a>
         ) : (
-          <>
-            {list.total} item{list.total === 1 ? '' : 's'} filed directly here.{' '}
-            <a href={self}>Include subcategories</a>
-          </>
+          <a href={`${self}${keep}`}>Include subcategories</a>
         )}
       </p>
     )}
-    {list.cards.length === 0 ? (
-      <p class="muted">No items filed directly here.</p>
-    ) : (
-      <CardGrid cards={list.cards} context={context} eagerCount={4} />
+    {shown === 0 && <p class="muted">No items filed directly here.</p>}
+    {grid && grid.cards.length > 0 && (
+      <CardGrid cards={grid.cards} context={context} eagerCount={4} />
     )}
-    <Pager page={page} total={list.total} pageSize={PAGE_SIZE} />
+    {feed && feed.items.length > 0 && (
+      <FeedList
+        items={feed.items}
+        context={context}
+        offset={offset}
+        total={total}
+        contextQuery={contextQuery(context)}
+      />
+    )}
+    <Pager page={page} total={total} pageSize={size} feed={view === 'feed'} />
   </section>
 </Base>
+
+<script>
+  import '../../scripts/feed.ts';
+</script>

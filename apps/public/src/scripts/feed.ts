@@ -73,8 +73,12 @@ if (feed) initFeed(feed);
 function initFeed(feed: HTMLElement): void {
   const context = new URLSearchParams((feed.dataset['context'] ?? '').replace(/^\?/, ''));
   const total = Number(feed.dataset['total'] ?? '0');
+  const followUrl = feed.dataset['followUrl'] !== 'false';
+  // With the feed running, the no-JavaScript pager is not needed.
+  document.querySelectorAll<HTMLElement>('[data-feed-pager]').forEach((p) => (p.hidden = true));
   let first = Number(feed.dataset['position'] ?? '0'); // list offset of the first loaded article
-  let last = first; // list offset of the last loaded article
+  // List offset of the last loaded article (a list page starts with several).
+  let last = first + Math.max(feed.querySelectorAll(':scope > article[data-item]').length - 1, 0);
   let loading: Promise<void> | null = null;
   let current: HTMLElement | null = feed.querySelector('article[data-item]');
   const siteTitle = document.title.split(' · ').slice(1).join(' · ');
@@ -150,7 +154,7 @@ function initFeed(feed: HTMLElement): void {
     const list = articles();
     const i = list.indexOf(current);
     const offset = first + i;
-    if (posLabel) posLabel.textContent = `${offset + 1} of ${total}`;
+    if (posLabel) posLabel.textContent = `${offset + 1} / ${total}`;
     const before = list[i - 1];
     const after = list[i + 1];
     if (prevLink) {
@@ -166,10 +170,14 @@ function initFeed(feed: HTMLElement): void {
   function setCurrent(a: HTMLElement): void {
     if (a === current) return;
     current = a;
-    const url = a.dataset['url'];
-    if (url) history.replaceState(history.state, '', url);
-    const title = a.dataset['title'];
-    if (title) document.title = siteTitle ? `${title} · ${siteTitle}` : title;
+    // On an item page the address bar follows the item on screen; a list
+    // shown as a feed keeps its own address (each title links to its item).
+    if (followUrl) {
+      const url = a.dataset['url'];
+      if (url) history.replaceState(history.state, '', url);
+      const title = a.dataset['title'];
+      if (title) document.title = siteTitle ? `${title} · ${siteTitle}` : title;
+    }
     updateControls();
     // Keep two items ready ahead (PUB-05).
     if (offsetOf(a) + 2 > last) void loadNext();

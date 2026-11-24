@@ -1,0 +1,41 @@
+---
+/**
+ * A list shown as the vertical feed (PUB-02 "Feed" layout, PUB-05): items one
+ * after another with their photo carousels; scripts/feed.ts loads more as you
+ * scroll. Without JavaScript the pager below gives the next page.
+ */
+import type { ListContext, PublicItemDetail } from '@cg/core/public';
+import ItemArticle from './ItemArticle.astro';
+import FeedControls from './FeedControls.astro';
+import { itemHref } from '../lib/context.ts';
+
+interface Props {
+  items: PublicItemDetail[];
+  context: ListContext;
+  /** List offset of the first item shown. */
+  offset: number;
+  total: number;
+  contextQuery: string;
+}
+const { items, context, offset, total, contextQuery } = Astro.props;
+const next = items[1];
+---
+
+<div
+  class="feed"
+  data-feed
+  data-follow-url="false"
+  data-context={contextQuery}
+  data-position={String(offset)}
+  data-total={String(total)}
+>
+  {items.map((item, i) => (
+    <ItemArticle item={item} context={context} headingLevel={2} eager={i === 0} />
+  ))}
+</div>
+<FeedControls
+  position={offset}
+  total={total}
+  prevHref={null}
+  nextHref={next ? itemHref(next.slug, context) : null}
+/>

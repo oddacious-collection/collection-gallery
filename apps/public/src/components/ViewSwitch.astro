@@ -1,0 +1,30 @@
+---
+/**
+ * Grid | Feed switch for a list (PUB-02, owner feedback 2026-11-24). The
+ * choice lives in the URL (?view=), so links keep it and nothing is stored
+ * (PRV-01). Switching starts the list from the top.
+ */
+import type { ListView } from '../lib/context.ts';
+
+interface Props {
+  view: ListView;
+  defaultView: ListView;
+}
+const { view, defaultView } = Astro.props;
+const href = (v: ListView) => {
+  const url = new URL(Astro.url);
+  url.searchParams.delete('page');
+  if (v === defaultView) url.searchParams.delete('view');
+  else url.searchParams.set('view', v);
+  return `${url.pathname}${url.search}`;
+};
+---
+
+<nav class="view-switch" aria-label="View">
+  <a href={href('feed')} aria-current={view === 'feed' ? 'page' : undefined}>
+    Feed
+  </a>
+  <a href={href('grid')} aria-current={view === 'grid' ? 'page' : undefined}>
+    Grid
+  </a>
+</nav>

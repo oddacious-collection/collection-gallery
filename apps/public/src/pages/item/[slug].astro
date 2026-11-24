@@ -23,6 +23,7 @@ import {
 } from '@cg/core/public';
 import Base from '../../layouts/Base.astro';
 import ItemArticle from '../../components/ItemArticle.astro';
+import FeedControls from '../../components/FeedControls.astro';
 import { contextFromUrl, contextQuery, itemHref } from '../../lib/context.ts';
 import { mediaUrl } from '../../lib/images.ts';
 
@@ -91,27 +92,12 @@ const og = item.media[0]?.og;
   >
     <ItemArticle item={item} context={context} headingLevel={1} eager />
   </div>
-  <nav class="feed-controls" aria-label="Items in this list" data-feed-controls>
-    <a
-      href={prev ? itemHref(prev.slug, context) : undefined}
-      rel="prev"
-      data-feed-prev
-      hidden={!prev}
-    >
-      ↑ Previous item
-    </a>
-    <span class="feed-pos" data-feed-pos>
-      {position + 1} of {total}
-    </span>
-    <a
-      href={next ? itemHref(next.slug, context) : undefined}
-      rel="next"
-      data-feed-next
-      hidden={!next}
-    >
-      Next item ↓
-    </a>
-  </nav>
+  <FeedControls
+    position={position}
+    total={total}
+    prevHref={prev ? itemHref(prev.slug, context) : null}
+    nextHref={next ? itemHref(next.slug, context) : null}
+  />
 </Base>
 
 <script>

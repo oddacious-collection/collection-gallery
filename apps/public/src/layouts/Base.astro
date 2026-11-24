@@ -30,6 +30,7 @@ const {
   query = '',
 } = Astro.props;
 const owner = await ownerName();
+const path = Astro.url.pathname;
 const fullTitle = title === SITE_NAME ? SITE_NAME : `${title} · ${SITE_NAME}`;
 const canonicalUrl = canonical ? absolute(canonical) : null;
 ---
@@ -63,6 +64,17 @@ const canonicalUrl = canonical ? absolute(canonical) : null;
         <a class="site-name" href="/">
           {SITE_NAME}
         </a>
+        <nav class="site-nav" aria-label="Site">
+          <a
+            href="/collections"
+            aria-current={path.startsWith('/collections') ? 'page' : undefined}
+          >
+            Collections
+          </a>
+          <a href="/items" aria-current={path === '/items' ? 'page' : undefined}>
+            All items
+          </a>
+        </nav>
         <form class="site-search" action="/search" method="get" role="search">
           <label class="visually-hidden" for="site-q">
             Search the collection
