@@ -71,7 +71,10 @@ function bucketFor(buckets: MediaBuckets, part: Pick<StoredPart, 'role'>): R2Buc
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  // Request bodies are plain ArrayBuffers (never shared memory).
+  const digest = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>),
+  );
   return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 

@@ -60,7 +60,7 @@ for (const [label, url] of [
 const home = await get(`${publicUrl}/`, serviceToken);
 check(home.status === 200, `public / with service token → 200 (got ${home.status})`);
 const homeHtml = await home.text();
-check(homeHtml.includes('Collection Gallery'), 'public / renders the hello-world page');
+check(homeHtml.includes('Collection Gallery'), 'public / renders the home page');
 for (const [name, value] of Object.entries(
   securityHeaders({ host: 'public', environment: 'staging' }),
 )) {
@@ -93,6 +93,20 @@ if (css !== undefined) {
 // The headers file configures the platform; it must not be served as a file.
 const headersFile = await get(`${publicUrl}/_headers`, serviceToken);
 check(headersFile.status === 404, `public /_headers is not served (got ${headersFile.status})`);
+
+// M1 public pages answer, and unknown things share one 404 (PUB-15).
+for (const path of ['/items', '/search', '/search?q=test', '/feed?offset=0&limit=1']) {
+  const res = await get(`${publicUrl}${path}`, serviceToken);
+  check(res.status === 200, `public ${path} → 200 (got ${res.status})`);
+}
+const missingItem = await get(`${publicUrl}/item/smoke-no-such-item`, serviceToken);
+const missingPage = await get(`${publicUrl}/smoke-no-such-page`, serviceToken);
+check(
+  missingItem.status === 404 && (await missingItem.text()) === (await missingPage.text()),
+  'public unknown item and unknown page give the identical 404',
+);
+const missingMedia = await get(`${publicUrl}/media/${'0'.repeat(26)}`, serviceToken);
+check(missingMedia.status === 404, `public unknown media → 404 (got ${missingMedia.status})`);
 
 // The pipeline itself answers 405 (a 403 would mean something else refused it).
 const post = await get(`${publicUrl}/`, serviceToken, 'POST');

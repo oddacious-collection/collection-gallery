@@ -1,13 +1,75 @@
 ---
+/** Home (PUB-01): intro, top-level categories, recently posted items. ("Surprise me" arrives in M3.) */
 import { env } from 'cloudflare:workers';
-import { getPublicSettings } from '@cg/core/public';
+import { categoryCovers, listContextCards, listPublicCategories } from '@cg/core/public';
 import Base from '../layouts/Base.astro';
+import CardGrid from '../components/CardGrid.astro';
+import Photo from '../components/Photo.astro';
+import { SITE_NAME, ownerName } from '../lib/site.ts';
 
-const settings = await getPublicSettings(env.DB);
-const ownerName = settings.owner_name ?? env.OWNER_NAME;
+const RECENT = 12;
+const [owner, categories, recent] = await Promise.all([
+  ownerName(),
+  listPublicCategories(env.DB),
+  listContextCards(env.DB, { kind: 'all' }, 0, RECENT),
+]);
+const top = categories.filter((c) => c.parentSlug === null);
+const covers = await categoryCovers(
+  env.DB,
+  top.map((c) => c.slug),
+);
+const description = `${owner}'s collection of collections.`;
 ---
 
-<Base title="Collection Gallery">
-  <h1>Collection Gallery</h1>
-  <p>Hello, world. This will be {ownerName}'s collection of collections. Coming soon.</p>
+<Base title={SITE_NAME} description={description} canonical="/">
+  <section class="intro">
+    <h1>{SITE_NAME}</h1>
+    <p>{description}</p>
+  </section>
+
+  {top.length > 0 && (
+    <section aria-labelledby="cats-h">
+      <h2 id="cats-h">Collections</h2>
+      <ul class="card-grid">
+        {top.map((c) => {
+          const cover = covers.get(c.slug);
+          return (
+            <li class="card">
+              <a href={`/category/${encodeURIComponent(c.slug)}`}>
+                {cover ? (
+                  <Photo
+                    image={{ ...cover, alt: '' }}
+                    sizes="(min-width: 70rem) 16rem, (min-width: 40rem) 30vw, 50vw"
+                    class="card-img"
+                  />
+                ) : (
+                  <span class="card-img card-empty" aria-hidden="true" />
+                )}
+                <span class="card-title">{c.name}</span>
+                <span class="card-meta">
+                  {c.itemCount} item{c.itemCount === 1 ? '' : 's'}
+                </span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  )}
+
+  <section aria-labelledby="recent-h">
+    <h2 id="recent-h">Recently posted</h2>
+    {recent.cards.length === 0 ? (
+      <p class="muted">Nothing posted yet.</p>
+    ) : (
+      <>
+        <CardGrid cards={recent.cards} context={{ kind: 'all' }} eagerCount={4} />
+        {recent.total > RECENT && (
+          <p>
+            <a href="/items">All {recent.total} items →</a>
+          </p>
+        )}
+      </>
+    )}
+  </section>
 </Base>

@@ -1,0 +1,91 @@
+---
+/**
+ * Search (PUB-08): full text over public titles, descriptions, tags and
+ * category names, optionally within one category. The index holds only
+ * public data (admin/search-index.ts); queries are words only (toFtsQuery).
+ * Rate-limited per Cloudflare location (SEC-11, D-53); no visitor data is
+ * used as the key.
+ */
+import { env } from 'cloudflare:workers';
+import {
+  SEARCH_MAX_QUERY,
+  listContextCards,
+  listPublicCategories,
+  type CardPage,
+  type ListContext,
+} from '@cg/core/public';
+import Base from '../layouts/Base.astro';
+import CardGrid from '../components/CardGrid.astro';
+import Pager from '../components/Pager.astro';
+import { PAGE_SIZE, pageFromUrl } from '../lib/context.ts';
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, SEARCH_MAX_QUERY);
+const inCategory = Astro.url.searchParams.get('in') ?? '';
+const categories = (await listPublicCategories(env.DB)).filter((c) => c.parentSlug === null);
+const scope = categories.find((c) => c.slug === inCategory);
+const page = pageFromUrl(Astro.url, 42);
+
+let limited = false;
+let results: CardPage | null = null;
+const context: ListContext = scope
+  ? { kind: 'search', q, category: scope.slug }
+  : { kind: 'search', q };
+if (q) {
+  const { success } = await env.SEARCH_LIMITER.limit({ key: 'search' });
+  if (!success) {
+    limited = true;
+    Astro.response.status = 429;
+    Astro.response.headers.set('Retry-After', '60');
+  } else {
+    results = await listContextCards(env.DB, context, (page - 1) * PAGE_SIZE, PAGE_SIZE);
+  }
+}
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+
+<Base title={q ? `Search: ${q}` : 'Search'} description="Search the collection." query={q}>
+  <h1>Search</h1>
+  <form class="search-form" action="/search" method="get" role="search">
+    <div>
+      <label for="q">Words to find</label>
+      <input id="q" name="q" type="search" maxlength={SEARCH_MAX_QUERY} value={q} required />
+    </div>
+    {categories.length > 0 && (
+      <div>
+        <label for="in">In</label>
+        <select id="in" name="in">
+          <option value="">All collections</option>
+          {categories.map((c) => (
+            <option value={c.slug} selected={c.slug === scope?.slug}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
+    <button type="submit">Search</button>
+  </form>
+
+  {limited && (
+    <p class="notice" role="status">
+      Too many searches right now. Please try again in a minute.
+    </p>
+  )}
+  {results && (
+    <section aria-labelledby="results-h">
+      <h2 id="results-h">
+        {results.total === 0
+          ? 'No matches'
+          : `${results.total} match${results.total === 1 ? '' : 'es'}`}
+      </h2>
+      {results.total === 0 ? (
+        <p class="muted">Try fewer or shorter words.</p>
+      ) : (
+        <>
+          <CardGrid cards={results.cards} context={context} eagerCount={4} />
+          <Pager page={page} total={results.total} pageSize={PAGE_SIZE} />
+        </>
+      )}
+    </section>
+  )}
+</Base>

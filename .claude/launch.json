@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "dev:public"],
       "port": 4321
+    },
+    {
+      "name": "public-preview",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "preview", "-w", "@cg/public"],
+      "port": 4321
     }
   ]
 }

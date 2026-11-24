@@ -22,6 +22,7 @@
     "check:bundle": "node scripts/check-public-bundle.ts",
     "db:generate": "npm run db:generate -w @cg/core",
     "db:migrate:local": "npm run db:migrate:local -w @cg/admin",
+    "db:seed:local": "node scripts/seed-local.ts",
     "db:migrate:staging": "npm run db:migrate:staging -w @cg/admin",
     "deploy:staging": "npm run deploy:staging -w @cg/public && npm run deploy:staging -w @cg/admin",
     "smoke:staging": "node scripts/smoke-staging.ts",

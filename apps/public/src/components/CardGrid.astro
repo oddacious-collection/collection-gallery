@@ -1,0 +1,30 @@
+---
+/** A grid of item cards linking into the feed with this list as context (PUB-05). */
+import type { ListContext, PublicCard } from '@cg/core/public';
+import { itemHref } from '../lib/context.ts';
+import Photo from './Photo.astro';
+
+interface Props {
+  cards: PublicCard[];
+  context: ListContext;
+  /** Eager-load the first few covers (above the fold). */
+  eagerCount?: number;
+}
+const { cards, context, eagerCount = 0 } = Astro.props;
+const SIZES = '(min-width: 70rem) 16rem, (min-width: 40rem) 30vw, 50vw';
+---
+
+<ul class="card-grid">
+  {cards.map((card, i) => (
+    <li class="card">
+      <a href={itemHref(card.slug, context)}>
+        {card.cover ? (
+          <Photo image={card.cover} sizes={SIZES} eager={i < eagerCount} class="card-img" />
+        ) : (
+          <span class="card-img card-empty" aria-hidden="true" />
+        )}
+        <span class="card-title">{card.title}</span>
+      </a>
+    </li>
+  ))}
+</ul>

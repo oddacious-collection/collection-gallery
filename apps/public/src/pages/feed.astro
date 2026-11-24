@@ -1,0 +1,28 @@
+---
+/**
+ * GET /feed?<context>&offset=N&limit=M — the next items of a list, as HTML
+ * <article>s for the vertical feed (PUB-05; scripts/feed.ts). A partial: no
+ * page shell. The same public queries and component as the item page, so it
+ * can't show anything the item page wouldn't.
+ */
+import { env } from 'cloudflare:workers';
+import { listContextItems } from '@cg/core/public';
+import ItemArticle from '../components/ItemArticle.astro';
+import { contextFromUrl } from '../lib/context.ts';
+
+export const partial = true;
+
+const context = contextFromUrl(Astro.url);
+const int = (name: string, fallback: number) => {
+  const n = Number.parseInt(Astro.url.searchParams.get(name) ?? '', 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+const offset = Math.max(int('offset', 0), 0);
+const limit = Math.min(Math.max(int('limit', 2), 1), 5);
+const { items } = await listContextItems(env.DB, context, offset, limit);
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+
+{items.map((item) => (
+  <ItemArticle item={item} context={context} headingLevel={2} />
+))}

@@ -33,6 +33,11 @@
     },
   ],
   "r2_buckets": [{ "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-local" }],
+  // SEC-11 / D-53: search is rate-limited per Cloudflare location with one
+  // shared key (no visitor data). Each environment has its own namespace.
+  "ratelimits": [
+    { "name": "SEARCH_LIMITER", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } },
+  ],
 
   "env": {
     "staging": {
@@ -57,6 +62,13 @@
         },
       ],
       "r2_buckets": [{ "binding": "MEDIA_PUBLIC", "bucket_name": "cg-media-public-staging" }],
+      "ratelimits": [
+        {
+          "name": "SEARCH_LIMITER",
+          "namespace_id": "1002",
+          "simple": { "limit": 120, "period": 60 },
+        },
+      ],
     },
   },
 }

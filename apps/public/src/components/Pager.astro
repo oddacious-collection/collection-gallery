@@ -1,0 +1,38 @@
+---
+/** Previous/next page links for a paged list (state in the URL, PUB-03). */
+interface Props {
+  page: number;
+  total: number;
+  pageSize: number;
+}
+const { page, total, pageSize } = Astro.props;
+const pages = Math.max(1, Math.ceil(total / pageSize));
+const href = (n: number) => {
+  const url = new URL(Astro.url);
+  if (n === 1) url.searchParams.delete('page');
+  else url.searchParams.set('page', String(n));
+  return `${url.pathname}${url.search}`;
+};
+---
+
+{pages > 1 && (
+  <nav class="pager" aria-label="Pages">
+    {page > 1 ? (
+      <a href={href(page - 1)} rel="prev">
+        ← Newer
+      </a>
+    ) : (
+      <span />
+    )}
+    <span>
+      Page {page} of {pages}
+    </span>
+    {page < pages ? (
+      <a href={href(page + 1)} rel="next">
+        Older →
+      </a>
+    ) : (
+      <span />
+    )}
+  </nav>
+)}

@@ -1,0 +1,119 @@
+---
+/**
+ * An item page (PUB-04), which is also the entry to the vertical feed
+ * (PUB-05). The list it was opened from travels in the query string
+ * (lib/context.ts); a direct visit uses "all public items, newest first".
+ *
+ * Without JavaScript: the item plus previous/next links. With it
+ * (scripts/feed.ts): neighbouring items load as you scroll, the URL follows
+ * the item on screen, and Back returns to the list.
+ *
+ * PUB-15: draft, private, wishlist, trashed and unknown items all get the
+ * same 404. An old slug of a public item answers 301 to the current one.
+ */
+import { env } from 'cloudflare:workers';
+import {
+  contextPosition,
+  getPublicItemBySlug,
+  getPublicItemDetail,
+  listContextCards,
+  listPublicCategories,
+  markdownToText,
+  type ListContext,
+} from '@cg/core/public';
+import Base from '../../layouts/Base.astro';
+import ItemArticle from '../../components/ItemArticle.astro';
+import { contextFromUrl, contextQuery, itemHref } from '../../lib/context.ts';
+import { mediaUrl } from '../../lib/images.ts';
+
+const slug = String(Astro.params['slug']);
+const item = await getPublicItemDetail(env.DB, slug);
+if (!item) {
+  const lookup = await getPublicItemBySlug(env.DB, slug);
+  if (lookup.kind === 'redirect') {
+    return Astro.redirect(`/item/${encodeURIComponent(lookup.slug)}${Astro.url.search}`, 301);
+  }
+  return new Response(null, { status: 404 });
+}
+
+let context: ListContext = contextFromUrl(Astro.url);
+let position = await contextPosition(env.DB, context, slug);
+if (position === null) {
+  context = { kind: 'all' };
+  position = (await contextPosition(env.DB, context, slug)) ?? 0;
+}
+const around = await listContextCards(env.DB, context, Math.max(position - 1, 0), 3);
+const prev = position > 0 ? around.cards[0] : undefined;
+const next = around.cards[position > 0 ? 2 : 1];
+const total = around.total;
+
+let back: { href: string; label: string };
+if (context.kind === 'category') {
+  const ctx = context;
+  const cat = (await listPublicCategories(env.DB)).find((c) => c.slug === ctx.slug);
+  back = {
+    href: `/category/${encodeURIComponent(ctx.slug)}${ctx.descendants ? '' : '?sub=0'}`,
+    label: cat?.name ?? 'Category',
+  };
+} else if (context.kind === 'search') {
+  back = { href: `/search${contextQuery(context)}`, label: `Search: ${context.q}` };
+} else {
+  back = { href: '/items', label: 'All items' };
+}
+const og = item.media[0]?.og;
+---
+
+<Base
+  title={item.title}
+  description={item.description ? markdownToText(item.description) : item.title}
+  canonical={`/item/${encodeURIComponent(item.slug)}`}
+  ogType="article"
+  image={
+    og
+      ? {
+          url: mediaUrl(og.key),
+          width: og.width,
+          height: og.height,
+          alt: item.media[0]?.alt ?? item.title,
+        }
+      : null
+  }
+>
+  <p class="back-link">
+    <a href={back.href}>← {back.label}</a>
+  </p>
+  <div
+    class="feed"
+    data-feed
+    data-context={contextQuery(context)}
+    data-position={String(position)}
+    data-total={String(total)}
+  >
+    <ItemArticle item={item} context={context} headingLevel={1} eager />
+  </div>
+  <nav class="feed-controls" aria-label="Items in this list" data-feed-controls>
+    <a
+      href={prev ? itemHref(prev.slug, context) : undefined}
+      rel="prev"
+      data-feed-prev
+      hidden={!prev}
+    >
+      ↑ Previous item
+    </a>
+    <span class="feed-pos" data-feed-pos>
+      {position + 1} of {total}
+    </span>
+    <a
+      href={next ? itemHref(next.slug, context) : undefined}
+      rel="next"
+      data-feed-next
+      hidden={!next}
+    >
+      Next item ↓
+    </a>
+  </nav>
+</Base>
+
+<script>
+  import '../../scripts/feed.ts';
+</script>

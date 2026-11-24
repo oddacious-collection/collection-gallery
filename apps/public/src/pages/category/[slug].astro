@@ -1,0 +1,133 @@
+---
+/**
+ * A category (PUB-07): breadcrumbs, subcategories, and its items, including
+ * those in subcategories (toggle with ?sub=0). Categories without any public
+ * item give the standard 404.
+ */
+import { env } from 'cloudflare:workers';
+import {
+  categoryCovers,
+  categoryTrail,
+  listContextCards,
+  listPublicCategories,
+  markdownToText,
+  renderMarkdown,
+  type ListContext,
+} from '@cg/core/public';
+import Base from '../../layouts/Base.astro';
+import CardGrid from '../../components/CardGrid.astro';
+import Pager from '../../components/Pager.astro';
+import Photo from '../../components/Photo.astro';
+import { PAGE_SIZE, pageFromUrl } from '../../lib/context.ts';
+
+const slug = String(Astro.params['slug']);
+const all = await listPublicCategories(env.DB);
+const category = all.find((c) => c.slug === slug);
+if (!category) return new Response(null, { status: 404 });
+
+const descendants = Astro.url.searchParams.get('sub') !== '0';
+const context: ListContext = { kind: 'category', slug, descendants };
+const page = pageFromUrl(Astro.url);
+const children = all.filter((c) => c.parentSlug === slug);
+const [list, covers] = await Promise.all([
+  listContextCards(env.DB, context, (page - 1) * PAGE_SIZE, PAGE_SIZE),
+  categoryCovers(
+    env.DB,
+    children.map((c) => c.slug),
+  ),
+]);
+if (list.cards.length === 0 && page > 1) return new Response(null, { status: 404 });
+const trail = categoryTrail(all, slug);
+const self = `/category/${encodeURIComponent(slug)}`;
+const description = category.description
+  ? markdownToText(category.description)
+  : `${category.name}: ${category.itemCount} item${category.itemCount === 1 ? '' : 's'}.`;
+---
+
+<Base
+  title={category.name}
+  description={description}
+  canonical={self}
+  image={
+    list.cards[0]?.cover?.og
+      ? {
+          url: `/media/${list.cards[0].cover.og.key}`,
+          width: list.cards[0].cover.og.width,
+          height: list.cards[0].cover.og.height,
+          alt: list.cards[0].cover.alt,
+        }
+      : null
+  }
+>
+  <nav class="breadcrumbs" aria-label="Breadcrumb">
+    <ol>
+      <li>
+        <a href="/">Home</a>
+      </li>
+      {trail.map((step, i) => (
+        <li>
+          {i === trail.length - 1 ? (
+            <span aria-current="page">{step.name}</span>
+          ) : (
+            <a href={`/category/${encodeURIComponent(step.slug)}`}>{step.name}</a>
+          )}
+        </li>
+      ))}
+    </ol>
+  </nav>
+  <h1>{category.name}</h1>
+  {category.description && <div class="prose" set:html={renderMarkdown(category.description)} />}
+
+  {children.length > 0 && (
+    <section aria-labelledby="sub-h">
+      <h2 id="sub-h">Subcategories</h2>
+      <ul class="card-grid small">
+        {children.map((c) => {
+          const cover = covers.get(c.slug);
+          return (
+            <li class="card">
+              <a href={`/category/${encodeURIComponent(c.slug)}`}>
+                {cover ? (
+                  <Photo
+                    image={{ ...cover, alt: '' }}
+                    sizes="(min-width: 40rem) 12rem, 33vw"
+                    class="card-img"
+                  />
+                ) : (
+                  <span class="card-img card-empty" aria-hidden="true" />
+                )}
+                <span class="card-title">{c.name}</span>
+                <span class="card-meta">{c.itemCount}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  )}
+
+  <section aria-labelledby="items-h">
+    <h2 id="items-h">Items</h2>
+    {children.length > 0 && (
+      <p class="muted">
+        {descendants ? (
+          <>
+            {list.total} item{list.total === 1 ? '' : 's'}, including subcategories.{' '}
+            <a href={`${self}?sub=0`}>Only items filed directly here</a>
+          </>
+        ) : (
+          <>
+            {list.total} item{list.total === 1 ? '' : 's'} filed directly here.{' '}
+            <a href={self}>Include subcategories</a>
+          </>
+        )}
+      </p>
+    )}
+    {list.cards.length === 0 ? (
+      <p class="muted">No items filed directly here.</p>
+    ) : (
+      <CardGrid cards={list.cards} context={context} eagerCount={4} />
+    )}
+    <Pager page={page} total={list.total} pageSize={PAGE_SIZE} />
+  </section>
+</Base>

@@ -61,6 +61,7 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run build
       - run: npm run db:migrate:local
+      - run: npm run db:seed:local
       - run: npm run test:e2e
         env:
           CI: 'true'

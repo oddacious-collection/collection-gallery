@@ -28,6 +28,7 @@ import { ulid } from '../ids.ts';
 import { slugify, uniqueSlug } from '../slug.ts';
 import { audit, run, type Db, type Op } from './db-util.ts';
 import { DomainError } from './domain-error.ts';
+import { reindexItemOps } from './search-index.ts';
 import {
   IdList,
   ItemCreate,
@@ -369,6 +370,7 @@ export async function updateItem(
     (k) => JSON.stringify(current[k as keyof ItemRow]) !== JSON.stringify(next[k as keyof ItemRow]),
   );
   ops.push(auditOp(db, actor, 'item.update', id, { changed }, at));
+  ops.push(...reindexItemOps(db, id));
   await run(db, ops);
   return next;
 }
@@ -416,6 +418,7 @@ export async function setItemStatus(
       .where(eq(items.id, id)),
     revisionOp(db, next, await readRelations(db, id), at),
     auditOp(db, actor, 'item.status', id, { from: current.status, to: target }, at),
+    ...reindexItemOps(db, id),
   ]);
   return next;
 }
@@ -455,6 +458,7 @@ async function setTrashed(
     db.update(items).set({ deletedAt: next.deletedAt, updatedAt: at }).where(eq(items.id, id)),
     revisionOp(db, next, await readRelations(db, id), at),
     auditOp(db, actor, trashed ? 'item.trash' : 'item.restore', id, {}, at),
+    ...reindexItemOps(db, id),
   ]);
   return next;
 }
@@ -489,6 +493,7 @@ export async function setItemCategories(
     db.update(items).set({ updatedAt: at }).where(eq(items.id, id)),
     revisionOp(db, next, { ...rel, categoryIds: ids }, at),
     auditOp(db, actor, 'item.categories', id, { from: rel.categoryIds, to: ids }, at),
+    ...reindexItemOps(db, id),
   ]);
 }
 
@@ -528,6 +533,7 @@ export async function setItemTags(
     db.update(items).set({ updatedAt: at }).where(eq(items.id, id)),
     revisionOp(db, { ...current, updatedAt: at }, { ...rel, tagIds }, at),
     auditOp(db, actor, 'item.tags', id, { tags: slugs }, at),
+    ...reindexItemOps(db, id),
   ]);
 }
 
