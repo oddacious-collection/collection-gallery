@@ -30,7 +30,9 @@ describe.each(cases)('security headers for $host/$environment', (opts) => {
 
   it('has a strict CSP', () => {
     expect(csp.get('default-src')).toBe("'none'");
-    expect(csp.get('script-src')).toBe("'self'");
+    expect(csp.get('script-src')).toBe(
+      opts.host === 'admin' ? "'self' 'wasm-unsafe-eval'" : "'self'",
+    );
     expect(csp.get('style-src')).toBe("'self'");
     expect(csp.get('object-src')).toBe("'none'");
     expect(csp.get('base-uri')).toBe("'none'");
@@ -73,6 +75,15 @@ describe('host differences', () => {
     expect(contentSecurityPolicy({ host: 'public', environment: 'production' })).not.toContain(
       'trusted-types',
     );
+  });
+
+  it('allows WebAssembly compilation on admin only (D-44), never JavaScript eval', () => {
+    const admin = contentSecurityPolicy({ host: 'admin', environment: 'production' });
+    expect(admin).toContain("'wasm-unsafe-eval'");
+    expect(admin.split(/[\s;]+/)).not.toContain("'unsafe-eval'");
+    for (const environment of ['production', 'staging', 'local'] as const) {
+      expect(contentSecurityPolicy({ host: 'public', environment })).not.toContain('wasm');
+    }
   });
 
   it('allows the camera on admin only', () => {

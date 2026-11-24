@@ -15,7 +15,7 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
 
 ### Plan (one PR per step; each goes through CI and staging)
 
-1. [ ] Kickoff docs: decisions D-42 to D-48, the D-22 correction, the threat model and this plan.
+1. [x] Kickoff docs: decisions D-42 to D-48, the D-22 correction, the threat model and this plan.
 2. [x] Data model, all of §4 (unit tests 80 → 106):
    - migrations, including the admin-only `source_caption` and hashtag suggestions (D-42);
    - ULIDs, slugs with redirects, revision snapshots, audit log, Zod schemas;
@@ -26,10 +26,12 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - revision history with diff and restore;
    - category tree (cycle-safe, multi-category, CNT-01 to 03);
    - assigning tags.
-4. [ ] Photo pipeline (MED-01 to 05, 07, 13):
-   - on-device processing: orientation, strip all metadata, JPEG master at 4608 px or less, WebP 400/800/1200/1600/2048 plus a 1200 px JPEG for Open Graph, creator/copyright written back;
-   - proxied upload (D-46) and finalize verification (MED-03);
-   - upload tests (the image parts of TST-05).
+4. [x] Photo pipeline (MED-01 to 05, 07, 13; D-51, D-52; unit tests 116 → 169, e2e 22 → 25 per browser):
+   - on-device processing in the admin: real file type sniffed (SVG, GIF, video refused with a clear message), decoded with orientation applied, redrawn from pixels (all metadata left behind), JPEG master at 4608 px / 16 MP or less, WebP 400–2048 (libwebp WASM) plus a 1200 px JPEG for Open Graph; HEIC works where Safari decodes it, elsewhere a clear message (D-48);
+   - upload through the admin Worker, one request per file, retried on network errors; each file verified **before** it is stored (type, structure, no trailing data, no metadata, exact size, limits); creator/copyright added by the server from the pen name; finalize attaches everything in one batch with a revision and audit entry;
+   - editor: add photos (camera or library on iPhone), thumbnails, alt text, make cover, ↑/↓, remove (restorable 30 days), download the private master; cover thumbnails in the item list;
+   - daily cron also purges photos removed > 30 days and uploads unfinished > 24 h;
+   - admin CSP adds `'wasm-unsafe-eval'` only (D-44); migration `0002_media_uploads`.
 5. [ ] Public site:
    - home, category pages (descendants included), item page with carousel and full-screen view, vertical feed (PUB-05);
    - search (FTS5, public data only, rate-limited, PUB-08);
@@ -192,6 +194,7 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 - Staging serves media from the public host (D-25).
 - `ADMIN_EMAIL` is split from the contact-form address (D-28).
 - `npm audit` is used instead of OSV-Scanner (D-36).
+- Photo files are verified as each one arrives, before storage, rather than only at finalize (stricter; D-51). Removing a single photo is soft with a 30-day restore (D-51).
 
 ### Known advisories (accepted, dev-only, below the high/critical CI gate)
 
@@ -202,23 +205,24 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 
 ### Dependencies (exact-pinned; one-line justification each)
 
-| Package                                                                             | Where      | Why                                                                                                                      |
-| ----------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `astro`                                                                             | apps       | Settled framework (D-02)                                                                                                 |
-| `@astrojs/cloudflare`                                                               | apps       | Official Workers adapter for Astro                                                                                       |
-| `@cg/core`                                                                          | apps       | Internal shared package (ARC-02)                                                                                         |
-| `zod`                                                                               | core       | Validation at trust boundaries (SEC-05, settled stack)                                                                   |
-| `jose`                                                                              | core       | Standard, dependency-free JWT/JWKS verification for SEC-03 (Web Crypto, works in Workers)                                |
-| `drizzle-orm`                                                                       | core       | Settled ORM, parameterised queries                                                                                       |
-| `drizzle-kit` (dev)                                                                 | core       | Generates forward-only SQL migrations (OPS-03). Its transitive `@esbuild-kit/*` deps are old but dev-only, never shipped |
-| `wrangler` (dev)                                                                    | root, apps | Cloudflare CLI: dev, deploy, D1 migrations, types                                                                        |
-| `typescript` (dev)                                                                  | root, apps | Strict typing; held at 6.0 for tool compatibility (D-33)                                                                 |
-| `@astrojs/check` (dev)                                                              | apps       | Typechecks `.astro` files                                                                                                |
-| `vitest` (dev)                                                                      | core       | Unit/integration tests (TST-01)                                                                                          |
-| `@cloudflare/vitest-plugin` (dev)                                                   | core       | Runs tests inside workerd (TST-01, D-34)                                                                                 |
-| `@cloudflare/workers-types` (dev)                                                   | core, apps | Workers runtime types                                                                                                    |
-| `@playwright/test` (dev)                                                            | root       | E2E across Chromium + WebKit (TST-01)                                                                                    |
-| `@axe-core/playwright` (dev)                                                        | root       | Accessibility checks in CI (NFR-03)                                                                                      |
-| `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-astro`, `globals` (dev) | root       | Linting incl. the INV-1 import boundary                                                                                  |
-| `prettier`, `prettier-plugin-astro` (dev)                                           | root       | Formatting                                                                                                               |
-| `@types/node` (dev)                                                                 | root       | Types for build/test scripts                                                                                             |
+| Package                                                                             | Where                | Why                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `astro`                                                                             | apps                 | Settled framework (D-02)                                                                                                                                                                             |
+| `@astrojs/cloudflare`                                                               | apps                 | Official Workers adapter for Astro                                                                                                                                                                   |
+| `@cg/core`                                                                          | apps                 | Internal shared package (ARC-02)                                                                                                                                                                     |
+| `zod`                                                                               | core                 | Validation at trust boundaries (SEC-05, settled stack)                                                                                                                                               |
+| `jose`                                                                              | core                 | Standard, dependency-free JWT/JWKS verification for SEC-03 (Web Crypto, works in Workers)                                                                                                            |
+| `drizzle-orm`                                                                       | core                 | Settled ORM, parameterised queries                                                                                                                                                                   |
+| `drizzle-kit` (dev)                                                                 | core                 | Generates forward-only SQL migrations (OPS-03). Its transitive `@esbuild-kit/*` deps are old but dev-only, never shipped                                                                             |
+| `wrangler` (dev)                                                                    | root, apps           | Cloudflare CLI: dev, deploy, D1 migrations, types                                                                                                                                                    |
+| `typescript` (dev)                                                                  | root, apps           | Strict typing; held at 6.0 for tool compatibility (D-33)                                                                                                                                             |
+| `@astrojs/check` (dev)                                                              | apps                 | Typechecks `.astro` files                                                                                                                                                                            |
+| `vitest` (dev)                                                                      | core                 | Unit/integration tests (TST-01)                                                                                                                                                                      |
+| `@cloudflare/vitest-plugin` (dev)                                                   | core                 | Runs tests inside workerd (TST-01, D-34)                                                                                                                                                             |
+| `@cloudflare/workers-types` (dev)                                                   | core, apps           | Workers runtime types                                                                                                                                                                                |
+| `@playwright/test` (dev)                                                            | root                 | E2E across Chromium + WebKit (TST-01)                                                                                                                                                                |
+| `@axe-core/playwright` (dev)                                                        | root                 | Accessibility checks in CI (NFR-03)                                                                                                                                                                  |
+| `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-astro`, `globals` (dev) | root                 | Linting incl. the INV-1 import boundary                                                                                                                                                              |
+| `prettier`, `prettier-plugin-astro` (dev)                                           | root                 | Formatting                                                                                                                                                                                           |
+| `@types/node` (dev)                                                                 | root                 | Types for build/test scripts                                                                                                                                                                         |
+| `@jsquash/webp`                                                                     | admin (browser only) | WebP encoding on the device (D-44): Safari can't encode WebP from a canvas. libwebp compiled to WASM, Apache-2.0, widely used; brings `wasm-feature-detect` (SIMD check). Never in the public bundle |

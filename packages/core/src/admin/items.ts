@@ -171,6 +171,27 @@ function revisionOp(db: Db, row: ItemRow, rel: Relations, at: string): Op {
   });
 }
 
+/**
+ * For changes to an item's photos (admin/media.ts): the item row, plus the ops
+ * that bump its `updated_at` and snapshot it with the new photo order.
+ * Throws not_found for an unknown item.
+ */
+export async function itemMediaChange(
+  db: Db,
+  itemId: string,
+  at: string,
+): Promise<{ item: ItemRow; ops: (mediaIds: string[]) => Op[] }> {
+  const item = await getRow(db, itemId);
+  const rel = await readRelations(db, itemId);
+  return {
+    item,
+    ops: (mediaIds) => [
+      db.update(items).set({ updatedAt: at }).where(eq(items.id, itemId)),
+      revisionOp(db, { ...item, updatedAt: at }, { ...rel, mediaIds }, at),
+    ],
+  };
+}
+
 function auditOp(
   db: Db,
   actor: string,

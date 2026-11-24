@@ -181,6 +181,26 @@ export const mediaVariants = sqliteTable(
   ],
 );
 
+/**
+ * A photo upload in progress (D-46). Created when the browser announces a
+ * photo; each file is verified and stored as it arrives; finalize turns the
+ * upload into a `media` row and deletes this one. Uploads never finalized are
+ * removed, with their files, after 24 hours. ADMIN.
+ */
+export const mediaUploads = sqliteTable(
+  'media_uploads',
+  {
+    id: text('id').primaryKey(), // random key, never reused
+    itemId: text('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    /** JSON: the planned files, each with its storage key (see admin/media.ts). */
+    parts: text('parts').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [index('media_uploads_created_idx').on(t.createdAt)],
+);
+
 // ------------------------------------------------------------------- categories (§4.3)
 
 export const categories = sqliteTable(

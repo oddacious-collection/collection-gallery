@@ -18,7 +18,12 @@ export default defineConfig({
   session: false,
   security: { checkOrigin: true },
   build: { inlineStylesheets: 'never' },
-  vite: { build: { assetsInlineLimit: 0 } },
+  vite: {
+    build: { assetsInlineLimit: 0 },
+    // The WebP encoder finds its .wasm file next to its own module; Vite's
+    // dependency pre-bundling would move the module away from it (dev only).
+    optimizeDeps: { exclude: ['@jsquash/webp'] },
+  },
   devToolbar: { enabled: false },
   prefetch: false,
 });

@@ -14,6 +14,7 @@ import { documents, items, media, mediaVariants } from '../db/schema.ts';
 import { logEvent } from '../errors.ts';
 import { audit, run, type Db } from './db-util.ts';
 import { DomainError } from './domain-error.ts';
+import { uploadKeysForItems } from './media.ts';
 
 export const TRASH_RETENTION_DAYS = 30;
 export const PURGE_ACTOR = 'system:trash-purge';
@@ -37,11 +38,14 @@ async function storageKeys(db: Db, itemIds: string[]) {
       .where(inArray(media.itemId, itemIds)),
     db.select({ key: documents.key }).from(documents).where(inArray(documents.itemId, itemIds)),
   ]);
+  // Unfinished uploads go with the item too (their rows cascade).
+  const pending = await uploadKeysForItems(db, itemIds);
   return {
-    publicKeys: variantRows.map((v) => v.key),
+    publicKeys: [...variantRows.map((v) => v.key), ...pending.publicKeys],
     privateKeys: [
       ...mediaRows.flatMap((m) => [m.originalKey, ...(m.captionsKey ? [m.captionsKey] : [])]),
       ...docRows.map((d) => d.key),
+      ...pending.privateKeys,
     ],
   };
 }

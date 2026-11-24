@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import {
   DomainError,
   getItem,
+  listItemMedia,
   listCategoryTree,
   publishBlockers,
   type CategoryNode,
@@ -21,7 +22,16 @@ try {
   }
   throw err;
 }
-const [tree, blockers] = await Promise.all([listCategoryTree(env.DB), publishBlockers(env.DB, id)]);
+const [tree, blockers, photos] = await Promise.all([
+  listCategoryTree(env.DB),
+  publishBlockers(env.DB, id),
+  listItemMedia(env.DB, id),
+]);
+/** Thumbnail size within a square box, aspect kept. */
+const fit = (p: { width: number; height: number }, box: number) =>
+  p.width >= p.height
+    ? { width: box, height: Math.max(1, Math.round((box * p.height) / p.width)) }
+    : { width: Math.max(1, Math.round((box * p.width) / p.height)), height: box };
 const byParent = new Map<string | null, CategoryNode[]>();
 for (const node of tree) {
   const list = byParent.get(node.parentId) ?? [];
@@ -39,7 +49,7 @@ const unusedSuggestions = suggestions.filter(
 );
 const REASON: Record<string, string> = {
   needs_category: 'Add at least one category.',
-  needs_media: 'Add at least one photo (photo uploads arrive in the next step).',
+  needs_media: 'Add at least one photo.',
   wishlist: 'Wishlist items can never be public.',
   in_trash: 'Restore it from the trash first.',
 };
@@ -286,12 +296,115 @@ const REASON: Record<string, string> = {
     </div>
   </form>
 
-  <section class="card">
-    <h2>Photos</h2>
-    <p class="muted">
-      {item.mediaCount} photo{item.mediaCount === 1 ? '' : 's'}. Uploading arrives in the next build
-      step.
-    </p>
+  <section class="card" id="photos" data-photos data-item-id={id} aria-labelledby="photos-h">
+    <h2 id="photos-h">Photos</h2>
+    {photos.active.length === 0 ? (
+      <p class="muted">No photos yet.</p>
+    ) : (
+      <ol class="photos" data-item-id={id}>
+        {photos.active.map((p, i) => (
+          <li data-media-id={p.id}>
+            {p.thumbKey ? (
+              <img src={`/media/${p.thumbKey}`} {...fit(p, 160)} alt={p.altText || item.title} />
+            ) : (
+              <span class="muted">(no preview)</span>
+            )}
+            <div class="photo-tools">
+              <p class="hint">
+                {p.isCover ? <strong>Cover photo · </strong> : `Photo ${i + 1} · `}
+                {p.width}×{p.height}
+              </p>
+              <form data-api={`/api/media/${p.id}`} data-method="PATCH" data-then="none">
+                <label for={`alt-${p.id}`}>Alt text (describes the photo for screen readers)</label>
+                <input
+                  id={`alt-${p.id}`}
+                  name="altText"
+                  type="text"
+                  maxlength="1000"
+                  value={p.altText}
+                  placeholder={`Blank uses the title: ${item.title}`}
+                />
+                <p data-api-message role="status"></p>
+                <div class="actions">
+                  <button type="submit" class="small">
+                    Save alt text
+                  </button>
+                </div>
+              </form>
+              <div class="actions">
+                {i > 0 && (
+                  <button type="button" class="small" data-photo-move="first">
+                    Make cover
+                  </button>
+                )}
+                {i > 0 && (
+                  <button
+                    type="button"
+                    class="small"
+                    data-photo-move="up"
+                    aria-label="Move earlier"
+                  >
+                    ↑
+                  </button>
+                )}
+                {i < photos.active.length - 1 && (
+                  <button
+                    type="button"
+                    class="small"
+                    data-photo-move="down"
+                    aria-label="Move later"
+                  >
+                    ↓
+                  </button>
+                )}
+                <a class="small" href={`/media/original/${p.id}`} download>
+                  Download original
+                </a>
+                <button
+                  type="button"
+                  class="small danger"
+                  data-api={`/api/media/${p.id}`}
+                  data-method="DELETE"
+                  data-confirm="Remove this photo? You can restore it here for 30 days."
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    )}
+    {!trashed && (
+      <>
+        <label for="photo-input">Add photos</label>
+        <input id="photo-input" type="file" accept="image/*" multiple data-photo-input />
+        <p class="hint">
+          On iPhone you can take a photo or choose from your library. Each photo is processed on
+          this device first: rotated upright, and location, camera and date details removed. Only
+          the cleaned copies are uploaded.
+        </p>
+        <ul class="photo-progress" data-photo-progress aria-live="polite"></ul>
+      </>
+    )}
+    {photos.removed.length > 0 && (
+      <details>
+        <summary>Removed photos ({photos.removed.length}, kept 30 days)</summary>
+        <ul class="photos removed">
+          {photos.removed.map((p) => (
+            <li>
+              {p.thumbKey && (
+                <img src={`/media/${p.thumbKey}`} {...fit(p, 80)} alt={p.altText || item.title} />
+              )}
+              <span class="hint">Removed {shortDateTime(p.deletedAt)}</span>
+              <button type="button" class="small" data-api={`/api/media/${p.id}/restore`}>
+                Restore
+              </button>
+            </li>
+          ))}
+        </ul>
+      </details>
+    )}
   </section>
 
   <section class="card">
@@ -329,3 +442,7 @@ const REASON: Record<string, string> = {
     </div>
   </section>
 </Admin>
+
+<script>
+  import '../../../scripts/photos/upload.ts';
+</script>
