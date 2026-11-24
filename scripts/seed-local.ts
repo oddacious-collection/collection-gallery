@@ -15,6 +15,7 @@ import {
   beginUpload,
   createCategory,
   createItem,
+  finalizeInboxUpload,
   finalizeUpload,
   setItemCategories,
   setItemStatus,
@@ -70,7 +71,7 @@ try {
       catIds.set(c.slug, row.id);
     }
 
-    const manifest: SeedManifest = { mediaKeys: {} };
+    const manifest: SeedManifest = { mediaKeys: {}, inbox: { variants: [], original: '' } };
     for (const s of SEED_ITEMS) {
       const item = await createItem(
         env.DB,
@@ -121,6 +122,29 @@ try {
       if (s.tags) await setItemTags(env.DB, item.id, s.tags, ACTOR);
       if (s.status !== 'draft') await setItemStatus(env.DB, item.id, s.status, ACTOR);
       if (s.trashed) await trashItem(env.DB, item.id, ACTOR);
+    }
+    // One photo left in the inbox (D-55): it must never be reachable publicly.
+    {
+      const { uploadId, parts } = await beginUpload(env.DB, null, { width: 400, height: 300 });
+      for (const part of parts) {
+        const file = readFileSync(seedImagePath(2, part.format === 'image/webp' ? 'webp' : 'jpg'));
+        await storeUploadPart(
+          env.DB,
+          env,
+          uploadId,
+          part.name,
+          new Uint8Array(file),
+          env.OWNER_NAME,
+        );
+      }
+      const row = await env.DB.prepare('SELECT parts FROM media_uploads WHERE id = ?')
+        .bind(uploadId)
+        .first<{ parts: string }>();
+      for (const p of JSON.parse(row?.parts ?? '[]') as Array<{ role: string; key: string }>) {
+        if (p.role === 'original') manifest.inbox.original = p.key;
+        else manifest.inbox.variants.push(p.key);
+      }
+      await finalizeInboxUpload(env.DB, env, uploadId, ACTOR);
     }
     mkdirSync(path.join(ROOT, '.wrangler'), { recursive: true });
     writeFileSync(path.join(ROOT, SEED_MANIFEST), JSON.stringify(manifest, null, 2));

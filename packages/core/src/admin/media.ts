@@ -19,10 +19,10 @@
  * Unfinished uploads are cleaned up after 24 hours, with their files.
  * Removing a photo is soft (kept 30 days, restorable; INV-2).
  */
-import { and, asc, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { z } from 'zod';
-import { items, media, mediaUploads, mediaVariants } from '../db/schema.ts';
+import { auditLog, inboxPhotos, items, media, mediaUploads, mediaVariants } from '../db/schema.ts';
 import { logEvent } from '../errors.ts';
 import { RANDOM_KEY_PATTERN, ULID_PATTERN, randomKey, ulid } from '../ids.ts';
 import {
@@ -37,7 +37,7 @@ import {
 } from '../media/index.ts';
 import { audit, run, type Db, type Op } from './db-util.ts';
 import { DomainError } from './domain-error.ts';
-import { itemMediaChange } from './items.ts';
+import { createItem, itemMediaChange, setItemCategories } from './items.ts';
 
 export interface MediaBuckets {
   MEDIA_PUBLIC: R2Bucket;
@@ -49,6 +49,8 @@ export const REMOVED_MEDIA_RETENTION_DAYS = 30;
 export const MAX_PHOTOS_PER_ITEM = 100;
 export const ALT_TEXT_MAX = 1000;
 export const MEDIA_PURGE_ACTOR = 'system:media-purge';
+/** The most photos the inbox holds at once (D-55). */
+export const MAX_INBOX_PHOTOS = 500;
 /** The largest single file the upload endpoint reads (the master's limit, MED-03). */
 export const MAX_UPLOAD_PART_BYTES = MAX_BYTES.original;
 
@@ -121,22 +123,36 @@ export interface BeganUpload {
   parts: PlannedPart[];
 }
 
+/**
+ * Starts an upload for an item, or (itemId = null) into the photo inbox
+ * (D-55). The files and checks are the same either way.
+ */
 export async function beginUpload(
   d1: D1Database,
-  itemId: string,
+  itemId: string | null,
   size: { width: number; height: number },
   now: Date = new Date(),
 ): Promise<BeganUpload> {
   const db = drizzle(d1);
-  const [item] = await db
-    .select({ deletedAt: items.deletedAt })
-    .from(items)
-    .where(eq(items.id, itemId))
-    .limit(1);
-  if (!item) throw new DomainError('not_found');
-  if (item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
-  if ((await activeMediaIds(db, itemId)).length >= MAX_PHOTOS_PER_ITEM) {
-    throw new DomainError('conflict', { reasons: ['too_many_photos'] });
+  if (itemId === null) {
+    const [row] = await db
+      .select({ n: count() })
+      .from(inboxPhotos)
+      .where(isNull(inboxPhotos.deletedAt));
+    if ((row?.n ?? 0) >= MAX_INBOX_PHOTOS) {
+      throw new DomainError('conflict', { reasons: ['inbox_full'] });
+    }
+  } else {
+    const [item] = await db
+      .select({ deletedAt: items.deletedAt })
+      .from(items)
+      .where(eq(items.id, itemId))
+      .limit(1);
+    if (!item) throw new DomainError('not_found');
+    if (item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
+    if ((await activeMediaIds(db, itemId)).length >= MAX_PHOTOS_PER_ITEM) {
+      throw new DomainError('conflict', { reasons: ['too_many_photos'] });
+    }
   }
   let plan: PlannedPart[];
   try {
@@ -202,6 +218,32 @@ export async function storeUploadPart(
   return { name: part.name, bytes: stored.length };
 }
 
+/** Confirms every planned file of an upload is stored (by this upload). */
+async function storedFiles(buckets: MediaBuckets, uploadId: string, parts: StoredPart[]) {
+  const heads = await Promise.all(
+    parts.map(async (p) => ({ part: p, head: await bucketFor(buckets, p).head(p.key) })),
+  );
+  const missing = heads
+    .filter(({ head }) => !head || head.customMetadata?.['upload'] !== uploadId)
+    .map(({ part }) => part.name);
+  if (missing.length > 0) {
+    throw new DomainError('conflict', { reasons: ['missing_files'], missing });
+  }
+  const original = heads.find((h) => h.part.role === 'original');
+  if (!original?.head) throw new DomainError('conflict', { reasons: ['missing_files'] });
+  return { heads, original: { part: original.part, head: original.head } };
+}
+
+/** Whether an upload is for an item or for the inbox (null: unknown or expired). */
+export async function uploadTarget(
+  d1: D1Database,
+  uploadId: string,
+  now: Date = new Date(),
+): Promise<'item' | 'inbox'> {
+  const upload = await loadUpload(drizzle(d1), uploadId, now);
+  return upload.itemId === null ? 'inbox' : 'item';
+}
+
 export async function finalizeUpload(
   d1: D1Database,
   buckets: MediaBuckets,
@@ -213,28 +255,20 @@ export async function finalizeUpload(
   const db = drizzle(d1);
   const alt = AltText.parse(altText);
   const upload = await loadUpload(db, uploadId, now);
+  if (upload.itemId === null) throw new DomainError('not_found', { reason: 'inbox_upload' });
+  const itemId = upload.itemId;
   const at = now.toISOString();
-  const change = await itemMediaChange(db, upload.itemId, at);
+  const change = await itemMediaChange(db, itemId, at);
   if (change.item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
 
-  const heads = await Promise.all(
-    upload.parts.map(async (p) => ({ part: p, head: await bucketFor(buckets, p).head(p.key) })),
-  );
-  const missing = heads
-    .filter(({ head }) => !head || head.customMetadata?.['upload'] !== uploadId)
-    .map(({ part }) => part.name);
-  if (missing.length > 0)
-    throw new DomainError('conflict', { reasons: ['missing_files'], missing });
-
-  const original = heads.find((h) => h.part.role === 'original');
-  if (!original?.head) throw new DomainError('conflict', { reasons: ['missing_files'] });
-  const active = await activeMediaIds(db, upload.itemId);
+  const { heads, original } = await storedFiles(buckets, uploadId, upload.parts);
+  const active = await activeMediaIds(db, itemId);
   const mediaId = ulid(now.getTime());
 
   await run(db, [
     db.insert(media).values({
       id: mediaId,
-      itemId: upload.itemId,
+      itemId,
       position: active.length,
       isCover: active.length === 0,
       kind: 'image',
@@ -261,7 +295,7 @@ export async function finalizeUpload(
     db.delete(mediaUploads).where(eq(mediaUploads.id, uploadId)),
     ...renumberOps(db, [...active, mediaId]),
     ...change.ops([...active, mediaId]),
-    audit(db, 'media', actor, 'media.add', mediaId, { itemId: upload.itemId }, at),
+    audit(db, 'media', actor, 'media.add', mediaId, { itemId }, at),
   ]);
   return { mediaId };
 }
@@ -386,8 +420,13 @@ export async function getVariantObject(
     .from(mediaVariants)
     .where(eq(mediaVariants.key, key))
     .limit(1);
-  if (!row) return null;
-  return buckets.MEDIA_PUBLIC.get(key);
+  if (row) return buckets.MEDIA_PUBLIC.get(key);
+  // Or a public-size file of an inbox photo (never its master).
+  const inbox = await db.get<{ n: number }>(sql`
+    SELECT count(*) AS n FROM inbox_photos, json_each(inbox_photos.parts) AS p
+    WHERE json_extract(p.value, '$.key') = ${key}
+      AND json_extract(p.value, '$.role') != 'original'`);
+  return (inbox?.n ?? 0) > 0 ? buckets.MEDIA_PUBLIC.get(key) : null;
 }
 
 /** The private master, for download by the owner only (MED-04). */
@@ -607,4 +646,354 @@ export async function uploadKeysForItems(
     publicKeys: parts.filter((p) => p.role !== 'original').map((p) => p.key),
     privateKeys: parts.filter((p) => p.role === 'original').map((p) => p.key),
   };
+}
+
+// ------------------------------------------------------------------ photo inbox (D-55)
+//
+// Photos uploaded without an item wait in `inbox_photos` (admin-only; the
+// public site never reads that table). Assigning moves them into `media` for
+// an item, keeping their storage keys: nothing is copied or re-uploaded.
+
+export const INBOX_RETENTION_DAYS = 30;
+export const INBOX_PURGE_ACTOR = 'system:inbox-purge';
+/** Photos per assignment: keeps one D1 batch well inside its limits. */
+export const MAX_ASSIGN = 50;
+
+const InboxPart = StoredPart.extend({ bytes: z.number().int().nonnegative() });
+type InboxPart = z.infer<typeof InboxPart>;
+const InboxParts = z.array(InboxPart);
+
+export interface InboxPhotoView {
+  id: string;
+  width: number;
+  height: number;
+  thumbKey: string | null;
+  largeKey: string | null;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+function inboxView(row: typeof inboxPhotos.$inferSelect): InboxPhotoView {
+  const images = InboxParts.parse(JSON.parse(row.parts))
+    .filter((p) => p.role === 'image')
+    .sort((a, b) => Math.max(a.width, a.height) - Math.max(b.width, b.height));
+  return {
+    id: row.id,
+    width: row.width,
+    height: row.height,
+    thumbKey: images[0]?.key ?? null,
+    largeKey: images[images.length - 1]?.key ?? null,
+    createdAt: row.createdAt,
+    deletedAt: row.deletedAt,
+  };
+}
+
+/** Finalize an inbox upload: its stored files become one inbox photo. */
+export async function finalizeInboxUpload(
+  d1: D1Database,
+  buckets: MediaBuckets,
+  uploadId: string,
+  actor: string,
+  now: Date = new Date(),
+): Promise<{ inboxId: string }> {
+  const db = drizzle(d1);
+  const upload = await loadUpload(db, uploadId, now);
+  if (upload.itemId !== null) throw new DomainError('not_found', { reason: 'item_upload' });
+  const { heads, original } = await storedFiles(buckets, uploadId, upload.parts);
+  const parts: InboxPart[] = heads.map(({ part, head }) => ({ ...part, bytes: head?.size ?? 0 }));
+  const at = now.toISOString();
+  const id = ulid(now.getTime());
+  await run(db, [
+    db.insert(inboxPhotos).values({
+      id,
+      parts: JSON.stringify(parts),
+      width: original.part.width,
+      height: original.part.height,
+      contentHash: original.head.customMetadata?.['sha256'] ?? null,
+      createdAt: at,
+    }),
+    db.delete(mediaUploads).where(eq(mediaUploads.id, uploadId)),
+    audit(db, 'media', actor, 'inbox.add', id, {}, at),
+  ]);
+  return { inboxId: id };
+}
+
+/** The inbox, oldest upload first (the order photos were taken), and what was removed. */
+export async function listInbox(
+  d1: D1Database,
+): Promise<{ photos: InboxPhotoView[]; removed: InboxPhotoView[] }> {
+  const db = drizzle(d1);
+  const rows = await db
+    .select()
+    .from(inboxPhotos)
+    .orderBy(asc(inboxPhotos.createdAt), asc(inboxPhotos.id));
+  const views = rows.map(inboxView);
+  return {
+    photos: views.filter((v) => v.deletedAt === null),
+    removed: views
+      .filter((v) => v.deletedAt !== null)
+      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')),
+  };
+}
+
+export const AssignInbox = z
+  .strictObject({
+    photoIds: z.array(z.string().regex(ULID_PATTERN)).min(1).max(MAX_ASSIGN),
+    /** Add to this existing item... */
+    itemId: z.string().regex(ULID_PATTERN).optional(),
+    /** ...or create a new draft with this title (and optional category). */
+    title: z.string().trim().min(1).max(200).optional(),
+    categoryId: z.string().min(1).max(32).nullable().optional(),
+  })
+  .refine((x) => (x.itemId === undefined) !== (x.title === undefined), {
+    message: 'Give either an item or a title for a new draft.',
+  });
+
+/**
+ * Moves inbox photos onto an item, in the order given (the first of a new
+ * draft becomes its cover). One batch: media rows and variants added, inbox
+ * rows removed, positions renumbered, revision and audit entries written.
+ * A new draft (with its category) is created first, in its own batches.
+ */
+export async function assignInboxPhotos(
+  d1: D1Database,
+  input: z.input<typeof AssignInbox>,
+  actor: string,
+  now: Date = new Date(),
+): Promise<{ itemId: string; created: boolean }> {
+  const data = AssignInbox.parse(input);
+  const ids = [...new Set(data.photoIds)];
+  const db = drizzle(d1);
+  const rows = await db
+    .select()
+    .from(inboxPhotos)
+    .where(and(inArray(inboxPhotos.id, ids), isNull(inboxPhotos.deletedAt)));
+  if (rows.length !== ids.length) throw new DomainError('not_found', { reason: 'inbox_photo' });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  let itemId = data.itemId;
+  let created = false;
+  if (itemId === undefined) {
+    itemId = (await createItem(d1, { title: data.title ?? '' }, actor, now)).id;
+    created = true;
+  }
+  const at = now.toISOString();
+  const change = await itemMediaChange(db, itemId, at);
+  if (change.item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
+  const active = await activeMediaIds(db, itemId);
+  if (active.length + ids.length > MAX_PHOTOS_PER_ITEM) {
+    throw new DomainError('conflict', { reasons: ['too_many_photos'] });
+  }
+
+  const ops: Op[] = [];
+  const newIds: string[] = [];
+  for (const inboxId of ids) {
+    const row = byId.get(inboxId);
+    if (!row) continue;
+    const parts = InboxParts.parse(JSON.parse(row.parts));
+    const original = parts.find((p) => p.role === 'original');
+    if (!original) throw new DomainError('conflict', { reasons: ['missing_files'] });
+    const mediaId = ulid(now.getTime());
+    newIds.push(mediaId);
+    ops.push(
+      db.insert(media).values({
+        id: mediaId,
+        itemId,
+        position: active.length + newIds.length - 1,
+        isCover: false,
+        kind: 'image',
+        originalKey: original.key,
+        width: row.width,
+        height: row.height,
+        altText: '',
+        contentHash: row.contentHash,
+        createdAt: at,
+      }),
+      ...parts
+        .filter((p) => p.role !== 'original')
+        .map((p) =>
+          db.insert(mediaVariants).values({
+            key: p.key,
+            mediaId,
+            role: p.role === 'og' ? 'og' : 'image',
+            width: p.width,
+            height: p.height,
+            format: p.format,
+            bytes: p.bytes,
+          }),
+        ),
+      db.delete(inboxPhotos).where(eq(inboxPhotos.id, inboxId)),
+      audit(db, 'media', actor, 'media.add', mediaId, { itemId, from: 'inbox', inboxId }, at),
+    );
+  }
+  const order = [...active, ...newIds];
+  await run(db, [...ops, ...renumberOps(db, order), ...change.ops(order)]);
+
+  if (created && data.categoryId) {
+    await setItemCategories(d1, itemId, [data.categoryId], actor, now);
+  }
+  return { itemId, created };
+}
+
+const InboxIds = z.array(z.string().regex(ULID_PATTERN)).min(1).max(MAX_INBOX_PHOTOS);
+
+/** Remove inbox photos (soft: restorable for 30 days). */
+export async function removeInboxPhotos(
+  d1: D1Database,
+  photoIds: string[],
+  actor: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const ids = [...new Set(InboxIds.parse(photoIds))];
+  const db = drizzle(d1);
+  const at = now.toISOString();
+  const live = await db
+    .select({ id: inboxPhotos.id })
+    .from(inboxPhotos)
+    .where(and(inArray(inboxPhotos.id, ids), isNull(inboxPhotos.deletedAt)));
+  if (live.length === 0) return 0;
+  await run(db, [
+    db
+      .update(inboxPhotos)
+      .set({ deletedAt: at })
+      .where(
+        inArray(
+          inboxPhotos.id,
+          live.map((r) => r.id),
+        ),
+      ),
+    ...live.map((r) => audit(db, 'media', actor, 'inbox.remove', r.id, {}, at)),
+  ]);
+  return live.length;
+}
+
+export async function restoreInboxPhotos(
+  d1: D1Database,
+  photoIds: string[],
+  actor: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const ids = [...new Set(InboxIds.parse(photoIds))];
+  const db = drizzle(d1);
+  const at = now.toISOString();
+  const gone = await db
+    .select({ id: inboxPhotos.id })
+    .from(inboxPhotos)
+    .where(and(inArray(inboxPhotos.id, ids), isNotNull(inboxPhotos.deletedAt)));
+  if (gone.length === 0) return 0;
+  await run(db, [
+    db
+      .update(inboxPhotos)
+      .set({ deletedAt: null })
+      .where(
+        inArray(
+          inboxPhotos.id,
+          gone.map((r) => r.id),
+        ),
+      ),
+    ...gone.map((r) => audit(db, 'media', actor, 'inbox.restore', r.id, {}, at)),
+  ]);
+  return gone.length;
+}
+
+/** Cron: permanently delete inbox photos removed more than 30 days ago (rows, then files). */
+export async function purgeRemovedInbox(
+  d1: D1Database,
+  buckets: MediaBuckets,
+  now: Date = new Date(),
+): Promise<number> {
+  const db = drizzle(d1);
+  const cutoff = new Date(now.getTime() - INBOX_RETENTION_DAYS * 24 * 3600 * 1000).toISOString();
+  const rows = await db
+    .select()
+    .from(inboxPhotos)
+    .where(and(isNotNull(inboxPhotos.deletedAt), lt(inboxPhotos.deletedAt, cutoff)))
+    .limit(200);
+  if (rows.length === 0) return 0;
+  const parts = rows.flatMap((r) => InboxParts.parse(JSON.parse(r.parts)));
+  const at = now.toISOString();
+  await run(db, [
+    ...rows.map((r) => audit(db, 'media', INBOX_PURGE_ACTOR, 'inbox.purge', r.id, {}, at)),
+    db.delete(inboxPhotos).where(
+      inArray(
+        inboxPhotos.id,
+        rows.map((r) => r.id),
+      ),
+    ),
+  ]);
+  await deleteKeys(
+    buckets.MEDIA_PRIVATE,
+    parts.filter((p) => p.role === 'original').map((p) => p.key),
+    'private',
+  );
+  await deleteKeys(
+    buckets.MEDIA_PUBLIC,
+    parts.filter((p) => p.role !== 'original').map((p) => p.key),
+    'public',
+  );
+  logEvent('info', 'inbox_purged', { photos: rows.length });
+  return rows.length;
+}
+
+export interface InboxAssignment {
+  itemId: string;
+  title: string;
+  photos: number;
+  at: string;
+  coverKey: string | null;
+}
+
+/** "Recently used": the latest items that received photos from the inbox. */
+export async function recentInboxAssignments(
+  d1: D1Database,
+  limit = 8,
+): Promise<InboxAssignment[]> {
+  const db = drizzle(d1);
+  const events = await db
+    .select({ at: auditLog.at, details: auditLog.details })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.action, 'media.add'),
+        sql`json_extract(${auditLog.details}, '$.from') = 'inbox'`,
+      ),
+    )
+    .orderBy(desc(auditLog.at))
+    .limit(200);
+  const byItem = new Map<string, { at: string; photos: number }>();
+  for (const e of events) {
+    const itemId = (JSON.parse(e.details) as { itemId?: string }).itemId;
+    if (!itemId) continue;
+    const seen = byItem.get(itemId);
+    if (seen) seen.photos++;
+    else if (byItem.size < limit) byItem.set(itemId, { at: e.at, photos: 1 });
+  }
+  const itemIds = [...byItem.keys()];
+  if (itemIds.length === 0) return [];
+  const [rows, covers] = await Promise.all([
+    db
+      .select({ id: items.id, title: items.title })
+      .from(items)
+      .where(and(inArray(items.id, itemIds), isNull(items.deletedAt))),
+    coverThumbKeys(d1, itemIds),
+  ]);
+  const title = new Map(rows.map((r) => [r.id, r.title]));
+  return itemIds
+    .filter((id) => title.has(id))
+    .map((id) => ({
+      itemId: id,
+      title: title.get(id) ?? '',
+      photos: byItem.get(id)?.photos ?? 0,
+      at: byItem.get(id)?.at ?? '',
+      coverKey: covers.get(id) ?? null,
+    }));
+}
+
+/** Photos waiting in the inbox (for the admin nav badge). */
+export async function countInbox(d1: D1Database): Promise<number> {
+  const [row] = await drizzle(d1)
+    .select({ n: count() })
+    .from(inboxPhotos)
+    .where(isNull(inboxPhotos.deletedAt));
+  return row?.n ?? 0;
 }

@@ -131,5 +131,7 @@ export const SENTINELS = ['SENTINEL-', '987654321', '9876543.21', 'owner@example
 /** Written by the seed script: public and hidden media keys, for media tests. */
 export interface SeedManifest {
   mediaKeys: Record<string, { variants: string[]; original: string }>;
+  /** An unassigned photo in the inbox (D-55): never public. */
+  inbox: { variants: string[]; original: string };
 }
 export const SEED_MANIFEST = '.wrangler/e2e-seed.json';

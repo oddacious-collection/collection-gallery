@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import {
   DomainError,
   getItem,
+  countInbox,
   listItemMedia,
   listCategoryTree,
   publishBlockers,
@@ -22,10 +23,11 @@ try {
   }
   throw err;
 }
-const [tree, blockers, photos] = await Promise.all([
+const [tree, blockers, photos, inboxCount] = await Promise.all([
   listCategoryTree(env.DB),
   publishBlockers(env.DB, id),
   listItemMedia(env.DB, id),
+  countInbox(env.DB),
 ]);
 /** Thumbnail size within a square box, aspect kept. */
 const fit = (p: { width: number; height: number }, box: number) =>
@@ -423,6 +425,11 @@ const REASON: Record<string, string> = {
       <>
         <label for="photo-input">Add photos</label>
         <input id="photo-input" type="file" accept="image/*" multiple data-photo-input />
+        {inboxCount > 0 && (
+          <p>
+            <a href={`/inbox?for=${id}`}>Add from the inbox ({inboxCount} waiting)</a>
+          </p>
+        )}
         <p class="hint">
           On iPhone you can take a photo or choose from your library. Each photo is processed on
           this device first: rotated upright, and location, camera and date details removed. Only

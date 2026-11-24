@@ -29,6 +29,13 @@
       "when": 1795544632517,
       "tag": "0003_search_index",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795556356137,
+      "tag": "0004_photo_inbox",
+      "breakpoints": true
     }
   ]
 }

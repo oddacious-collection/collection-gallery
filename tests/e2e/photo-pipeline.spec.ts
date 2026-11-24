@@ -37,11 +37,15 @@ function editorScript(): string {
   return name;
 }
 
-const PAGE = (script: string) => `<!doctype html>
+const PAGE = (script: string, inbox = false) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Photo harness</title>
 <script type="module" src="/_astro/${script}"></script></head>
 <body><main>
-<section data-photos data-item-id="${ITEM}">
+${
+  inbox
+    ? `<section data-photos data-begin-url="/api/inbox/uploads" data-finish-label="Adding the photo to the inbox">`
+    : `<section data-photos data-item-id="${ITEM}">`
+}
   <label for="photo-input">Add photos</label>
   <input id="photo-input" type="file" accept="image/*" multiple data-photo-input>
   <ul data-photo-progress aria-live="polite"></ul>
@@ -59,7 +63,7 @@ interface Capture {
   progress: string[];
 }
 
-async function harness(page: Page): Promise<Capture> {
+async function harness(page: Page, opts: { inbox?: boolean } = {}): Promise<Capture> {
   const capture: Capture = {
     plan: null,
     files: new Map(),
@@ -115,7 +119,7 @@ async function harness(page: Page): Promise<Capture> {
       return route.fulfill({
         status: 200,
         headers: { ...headers, 'content-type': 'text/html; charset=utf-8' },
-        body: PAGE(script),
+        body: PAGE(script, opts.inbox === true),
       });
     }
     if (url.pathname.startsWith('/_astro/')) {
@@ -135,7 +139,8 @@ async function harness(page: Page): Promise<Capture> {
     if (req.method() !== 'GET') {
       expect(req.headers()['x-cg-request']).toBe('1');
     }
-    if (req.method() === 'POST' && url.pathname === `/api/items/${ITEM}/media`) {
+    const begin = opts.inbox ? `/api/inbox/uploads` : `/api/items/${ITEM}/media`;
+    if (req.method() === 'POST' && url.pathname === begin) {
       const { width, height } = req.postDataJSON() as { width: number; height: number };
       capture.plan = uploadPlan(width, height);
       return json(201, {
@@ -322,5 +327,22 @@ test('refused files: nothing is processed or sent', async ({ page }) => {
   await expect(rows.nth(0)).toContainText('Stopped at: Checking the file type');
   await expect(page.locator('input[data-photo-input]')).toBeEnabled();
   expect(capture.requests.filter((r) => r.includes('/api/'))).toEqual([]);
+  expect(capture.violations).toEqual([]);
+});
+
+test('the inbox page uploads to the inbox with the same pipeline (D-55)', async ({ page }) => {
+  const capture = await harness(page, { inbox: true });
+  await page.setInputFiles('input[data-photo-input]', FIXTURE);
+  await expect.poll(() => capture.finalized, { timeout: 120_000 }).toBe(true);
+  expect(capture.requests).toContain('POST /api/inbox/uploads');
+  for (const part of capture.plan ?? []) {
+    expect(
+      verifyPart(new Uint8Array(capture.files.get(part.name) as Buffer), part),
+      part.name,
+    ).toEqual({
+      ok: true,
+    });
+  }
+  expect(capture.progress.join(' | ')).toContain('Adding the photo to the inbox');
   expect(capture.violations).toEqual([]);
 });

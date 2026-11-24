@@ -27,6 +27,8 @@ function serverMessage(status: number, data: Record<string, unknown>): string {
   if (reasons.includes('in_trash')) return 'This item is in the trash. Restore it first.';
   if (reasons.includes('too_many_photos'))
     return 'This item already has the maximum number of photos.';
+  if (reasons.includes('inbox_full'))
+    return 'The inbox is full (500 photos). Sort some into items first.';
   if (reason === 'photo_too_small') return PHOTO_ERROR_TEXT.too_small;
   if (reason.startsWith('file_')) {
     return `The server refused one of the processed files (${reason.slice(5).replace(/_/g, ' ')}). Nothing was added.`;
@@ -70,12 +72,16 @@ interface Began {
   parts: Array<{ name: string; width: number; height: number }>;
 }
 
-async function uploadOne(itemId: string, file: File, say: (s: string) => void): Promise<void> {
+async function uploadOne(
+  target: { beginUrl: string; finishLabel: string },
+  file: File,
+  say: (s: string) => void,
+): Promise<void> {
   const photo = await processPhoto(file, encodeWebp, say);
   say('Starting the upload');
   const began = (await request(
     'POST',
-    `/api/items/${encodeURIComponent(itemId)}/media`,
+    target.beginUrl,
     JSON.stringify({ width: photo.width, height: photo.height }),
     'application/json',
   )) as unknown as Began;
@@ -98,7 +104,7 @@ async function uploadOne(itemId: string, file: File, say: (s: string) => void): 
       part.format,
     );
   }
-  say('Attaching the photo to the item');
+  say(target.finishLabel);
   await request(
     'POST',
     `/api/uploads/${encodeURIComponent(began.uploadId)}/finalize`,
@@ -108,10 +114,17 @@ async function uploadOne(itemId: string, file: File, say: (s: string) => void): 
 }
 
 function init(section: HTMLElement): void {
+  // Where uploads start: an item's photos, or the inbox (D-55).
   const itemId = section.dataset['itemId'] ?? '';
+  const target = {
+    beginUrl:
+      section.dataset['beginUrl'] ??
+      (itemId ? `/api/items/${encodeURIComponent(itemId)}/media` : ''),
+    finishLabel: section.dataset['finishLabel'] ?? 'Attaching the photo to the item',
+  };
   const input = section.querySelector<HTMLInputElement>('input[data-photo-input]');
   const progress = section.querySelector<HTMLElement>('[data-photo-progress]');
-  if (!input || !progress || !itemId) return;
+  if (!input || !progress || !target.beginUrl) return;
 
   input.addEventListener('change', () => {
     const files = Array.from(input.files ?? []);
@@ -135,7 +148,7 @@ function init(section: HTMLElement): void {
           li.textContent = `${file.name}${counter}: ${s}…`;
         };
         try {
-          await uploadOne(itemId, file, say);
+          await uploadOne(target, file, say);
           li.textContent = `${file.name}: added.`;
           li.classList.add('ok');
           added++;

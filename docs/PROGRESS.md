@@ -40,11 +40,13 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - photo files served only for public items, with Range and conditional requests (MED-10);
    - identical 404 for every non-public or unknown item, category or photo; old slugs 301; canonical URLs and basic Open Graph;
    - local seed data with sentinels (`npm run db:seed:local`), used by CI e2e.
-     5b. [ ] Photo inbox (D-55, owner request 2026-11-24):
-   - bulk upload into an admin-only inbox (same pipeline and checks); thumbnail grid of unused photos;
-   - select photos → create a draft (title + remembered categories) or add to an existing item ("Add from inbox" in the editor);
-   - "Recently used" list linking to items; soft remove with 30-day restore;
-   - privacy: inbox photos are never public (covered by step 6).
+
+**5b. [x] Photo inbox** (D-55, owner request 2026-11-24; unit tests 183 → 188, e2e 51 → 53 per browser):
+
+- Inbox page: bulk upload (same pipeline and checks), grid of waiting photos, tap to pick in order (numbered; #1 becomes the cover), "Create draft…" dialog (title + category, remembered for the next draft), Remove (30-day restore);
+- "Add from the inbox" in the item editor; "Recently used" list; inbox count in the admin nav; daily cron purges removed inbox photos;
+- privacy: inbox photos live in their own table, which no public query reads; core and e2e tests confirm none of their files are reachable publicly.
+
 6. [ ] Privacy-leak suite (TST-02): a local deploy gate in CI, plus a crawl of staging after deploy using seeded sentinels (inbox photos included).
 7. [ ] Backups (D-47):
    - backup Worker: nightly database JSON export and media sync to B2 with Object Lock;
