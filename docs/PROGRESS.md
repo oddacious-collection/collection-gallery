@@ -47,7 +47,7 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
 - "Add from the inbox" in the item editor; "Recently used" list; inbox count in the admin nav; daily cron purges removed inbox photos;
 - privacy: inbox photos live in their own table, which no public query reads; core and e2e tests confirm none of their files are reachable publicly.
 
-6. [ ] Privacy-leak suite (TST-02): a local deploy gate in CI, plus a crawl of staging after deploy using seeded sentinels (inbox photos included).
+6. [x] Privacy-leak suite (TST-02, D-56): sentinel seed (`tests/leak/sentinels.sql`) covering every admin-only column, hidden items of each kind, private photos, an inbox photo and a private old slug; a crawler over every page, photo, search and feed fragment, also checking all private storage keys and internal IDs from the database; two phases with items flipped private ↔ public; a self-check that proves it catches a planted leak. Runs in CI as a deploy gate (`npm run leak:local`) and against staging after every deploy (`npm run leak:staging`).
 7. [ ] Backups (D-47):
    - backup Worker: nightly database JSON export and media sync to B2 with Object Lock;
    - failure email; `backup:verify` plus a weekly CI check;

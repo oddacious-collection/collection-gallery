@@ -65,6 +65,10 @@ jobs:
       - run: npm run test:e2e
         env:
           CI: 'true'
+      # TST-02 deploy gate: no private data on any public surface, before
+      # and after flipping items private <-> public. Deploys need this job.
+      - name: Privacy-leak suite (TST-02)
+        run: npm run leak:local
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -159,6 +163,14 @@ jobs:
           STAGING_ADMIN_URL: ${{ secrets.STAGING_ADMIN_URL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Privacy-leak suite on staging (TST-02)
+        run: npm run leak:staging
+        env:
+          STAGING_PUBLIC_URL: ${{ secrets.STAGING_PUBLIC_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   zap-baseline:
     name: ZAP baseline scan (staging, SEC-16)
