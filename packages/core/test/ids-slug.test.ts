@@ -42,6 +42,13 @@ describe('slugify', () => {
     expect(slugify(input)).toBe(expected);
   });
 
+  it('stays fast on hostile input (no ReDoS)', () => {
+    const hostile = `a${'-'.repeat(200_000)}!`;
+    const started = Date.now();
+    expect(slugify(hostile)).toBe('a');
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   it('caps the length without a trailing hyphen', () => {
     const s = slugify(`${'a'.repeat(79)} b`);
     expect(s.length).toBeLessThanOrEqual(SLUG_MAX_LENGTH);
