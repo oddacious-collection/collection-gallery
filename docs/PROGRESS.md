@@ -55,7 +55,7 @@ Claude gives click-by-click steps when each is needed.
 
 ### Not in M1
 
-- Tag rename/merge, filters, sorts and layouts (M3).
+- Tag rename/merge, filters, sorts and layouts (M3); desktop drag-and-drop for categories as an extra (M3 polish, D-50).
 - Video (M4).
 - Watermark and licensing (M5).
 - Edge caching and the domain move (M7, D-45).
