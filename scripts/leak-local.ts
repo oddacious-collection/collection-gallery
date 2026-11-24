@@ -11,7 +11,7 @@
  * Exits 1 on any leak. CI runs it before any deploy.
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { ROOT, applySql, runPhase, selfCheck } from '../tests/leak/run.ts';
+import { ROOT, applySql, privateFacts, runPhase, selfCheck } from '../tests/leak/run.ts';
 
 const BASE = 'http://localhost:4321';
 const local = { kind: 'local' } as const;
@@ -74,10 +74,12 @@ try {
   applySql(local, 'sentinels.sql');
   for (const phase of ['a', 'b'] as const) {
     applySql(local, `toggle-${phase}.sql`);
+    // Read before starting the site: Wrangler's local D1 must not run beside it.
+    const facts = privateFacts(local);
     server = startPublic();
     await waitUntilUp();
     if (phase === 'a' && !(await selfCheck(BASE))) failures++;
-    failures += (await runPhase(phase, BASE, local)).failures.length;
+    failures += (await runPhase(phase, BASE, facts)).failures.length;
     stop(server);
     server = null;
     await new Promise((r) => setTimeout(r, 1500));

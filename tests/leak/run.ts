@@ -4,8 +4,6 @@
  * database, run one crawl phase.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { crawl, type CrawlResult, type Forbidden } from './crawl.ts';
 import { phaseChecks, type Phase } from './config.ts';
@@ -21,16 +19,15 @@ function wranglerArgs(target: Target): string[] {
     : ['--remote', '--config', ADMIN_CONFIG, '--env', 'staging'];
 }
 
+/**
+ * Runs Wrangler's own entry script with this Node: no shell on any platform,
+ * so arguments (SQL included) arrive exactly as given, on Windows and Linux.
+ */
 function wrangler(args: string[]): string {
-  const bin = path.join(
-    ROOT,
-    'node_modules/.bin',
-    process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler',
-  );
-  return execFileSync(bin, args, {
+  const entry = path.join(ROOT, 'node_modules/wrangler/bin/wrangler.js');
+  return execFileSync(process.execPath, [entry, ...args], {
     cwd: ROOT,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -56,8 +53,9 @@ export function privateFacts(target: Target): {
   forbidden: Forbidden[];
   must404: Array<{ label: string; path: string }>;
 } {
-  // One statement per kind (D1 limits compound SELECTs); one result set each.
-  const sql = [
+  // One query per call: D1 limits compound SELECTs, and remote `--file`
+  // runs use Cloudflare's import API, which returns no rows.
+  const queries = [
     "SELECT 'master' AS kind, original_key AS v FROM media",
     "SELECT 'captions' AS kind, captions_key AS v FROM media WHERE captions_key IS NOT NULL",
     "SELECT 'hidden photo' AS kind, v.key AS v FROM media_variants v JOIN media m ON m.id = v.media_id JOIN items i ON i.id = m.item_id WHERE m.deleted_at IS NOT NULL OR NOT (i.status = 'public' AND i.kind = 'owned' AND i.deleted_at IS NULL)",
@@ -68,30 +66,27 @@ export function privateFacts(target: Target): {
     "SELECT 'id' AS kind, id AS v FROM categories",
     "SELECT 'id' AS kind, id AS v FROM tags",
     "SELECT 'id' AS kind, id AS v FROM inbox_photos",
-  ].join(';\n');
-  // Passed as a file: a long --command doesn't survive Windows shell quoting.
-  const dir = mkdtempSync(path.join(tmpdir(), 'cg-leak-'));
-  const file = path.join(dir, 'facts.sql');
-  writeFileSync(file, `${sql};\n`);
-  let out: string;
-  try {
-    out = wrangler([
+  ];
+  const rows = queries.flatMap((q) => {
+    const out = wrangler([
       'd1',
       'execute',
       'DB',
       ...wranglerArgs(target),
       '--json',
-      '--file',
-      file,
-      '--yes',
+      '--command',
+      q,
     ]);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+    const json = JSON.parse(out.slice(out.indexOf('['))) as Array<{
+      results?: Array<{ kind: string; v: string }>;
+    }>;
+    return json.flatMap((r) => r.results ?? []);
+  });
+  // The sentinel rows alone guarantee some; none means the query path broke,
+  // which must never look like "nothing private exists".
+  if (!rows.some((r) => r.kind === 'id') || !rows.some((r) => r.kind === 'master')) {
+    throw new Error(`read ${rows.length} private facts from D1; expected IDs and photo keys`);
   }
-  const json = JSON.parse(out.slice(out.indexOf('['))) as Array<{
-    results: Array<{ kind: string; v: string }>;
-  }>;
-  const rows = json.flatMap((r) => r.results);
   const counts = new Map<string, number>();
   const forbidden: Forbidden[] = [];
   const must404: Array<{ label: string; path: string }> = [];
@@ -110,11 +105,11 @@ export function privateFacts(target: Target): {
 export async function runPhase(
   phase: Phase,
   base: string,
-  target: Target,
+  facts: ReturnType<typeof privateFacts>,
   headers: Record<string, string> = {},
 ): Promise<CrawlResult> {
   const checks = phaseChecks(phase);
-  const facts = privateFacts(target);
+
   const result = await crawl({
     base,
     headers,
