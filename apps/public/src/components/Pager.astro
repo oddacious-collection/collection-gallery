@@ -4,8 +4,10 @@ interface Props {
   page: number;
   total: number;
   pageSize: number;
+  /** Under a feed: hidden once the feed script takes over. */
+  feed?: boolean;
 }
-const { page, total, pageSize } = Astro.props;
+const { page, total, pageSize, feed = false } = Astro.props;
 const pages = Math.max(1, Math.ceil(total / pageSize));
 const href = (n: number) => {
   const url = new URL(Astro.url);
@@ -16,7 +18,7 @@ const href = (n: number) => {
 ---
 
 {pages > 1 && (
-  <nav class="pager" aria-label="Pages">
+  <nav class="pager" aria-label="Pages" data-feed-pager={feed ? '' : undefined}>
     {page > 1 ? (
       <a href={href(page - 1)} rel="prev">
         ← Newer

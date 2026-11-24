@@ -1,0 +1,27 @@
+---
+/**
+ * Collections index (owner feedback 2026-11-24): every public category as one
+ * nested list with item counts, so any collection is one click away.
+ */
+import { env } from 'cloudflare:workers';
+import { listPublicCategories, type PublicCategory } from '@cg/core/public';
+import Base from '../layouts/Base.astro';
+import CategoryList from '../components/CategoryList.astro';
+
+const all = await listPublicCategories(env.DB);
+const byParent = new Map<string | null, PublicCategory[]>();
+for (const c of all) {
+  const list = byParent.get(c.parentSlug) ?? [];
+  list.push(c);
+  byParent.set(c.parentSlug, list);
+}
+---
+
+<Base title="Collections" description="Every collection, at a glance." canonical="/collections">
+  <h1>Collections</h1>
+  {all.length === 0 ? (
+    <p class="muted">Nothing posted yet.</p>
+  ) : (
+    <CategoryList byParent={byParent} parent={null} />
+  )}
+</Base>

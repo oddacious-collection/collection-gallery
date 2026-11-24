@@ -1,0 +1,23 @@
+---
+/** The public category tree as nested lists with item counts (recursive). */
+import type { PublicCategory } from '@cg/core/public';
+
+interface Props {
+  byParent: Map<string | null, PublicCategory[]>;
+  parent: string | null;
+}
+const { byParent, parent } = Astro.props;
+const children = byParent.get(parent) ?? [];
+---
+
+{children.length > 0 && (
+  <ul class={parent === null ? 'tree' : 'tree sub'}>
+    {children.map((c) => (
+      <li>
+        <a href={`/category/${encodeURIComponent(c.slug)}`}>{c.name}</a>{' '}
+        <span class="chip-count">{c.itemCount}</span>
+        <Astro.self byParent={byParent} parent={c.slug} />
+      </li>
+    ))}
+  </ul>
+)}

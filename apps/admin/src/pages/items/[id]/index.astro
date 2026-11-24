@@ -107,6 +107,7 @@ const REASON: Record<string, string> = {
             data-body='{"status":"public"}'
             disabled={blockers.length > 0}
             data-publish
+            data-then="redirect:/items?published={id}"
           >
             Publish
           </button>
@@ -120,7 +121,7 @@ const REASON: Record<string, string> = {
     )}
   </section>
 
-  <form class="card" data-api={`/api/items/${id}`} data-method="PATCH">
+  <form class="card" data-api={`/api/items/${id}`} data-method="PATCH" data-label="Details">
     <h2>Details</h2>
     <label for="title">Title</label>
     <input id="title" name="title" type="text" required maxlength="200" value={item.title} />
@@ -256,6 +257,7 @@ const REASON: Record<string, string> = {
     data-api={`/api/items/${id}/categories`}
     data-method="PUT"
     data-category-form
+    data-label="Categories"
     data-item-id={id}
   >
     <h2>Categories</h2>
@@ -309,7 +311,7 @@ const REASON: Record<string, string> = {
     </details>
   </form>
 
-  <form class="card" data-api={`/api/items/${id}/tags`} data-method="PUT">
+  <form class="card" data-api={`/api/items/${id}/tags`} data-method="PUT" data-label="Tags">
     <h2>Tags</h2>
     <label for="tags">Tags, separated by commas</label>
     <input id="tags" name="tags" type="text" data-type="list" value={item.tagNames.join(', ')} />
@@ -320,13 +322,7 @@ const REASON: Record<string, string> = {
         </p>
         <div class="suggestions">
           {unusedSuggestions.map((s) => (
-            <button
-              type="button"
-              class="small"
-              data-api={`/api/items/${id}/tags`}
-              data-method="PUT"
-              data-body={JSON.stringify({ tags: [...item.tagNames, s] })}
-            >
+            <button type="button" class="small" data-add-tag={s}>
               + {s}
             </button>
           ))}
@@ -354,10 +350,15 @@ const REASON: Record<string, string> = {
             )}
             <div class="photo-tools">
               <p class="hint">
-                {p.isCover ? <strong>Cover photo · </strong> : `Photo ${i + 1} · `}
-                {p.width}×{p.height}
+                {p.isCover ? <span class="badge public">Cover</span> : `Photo ${i + 1}`} · {p.width}
+                ×{p.height}
               </p>
-              <form data-api={`/api/media/${p.id}`} data-method="PATCH" data-then="none">
+              <form
+                data-api={`/api/media/${p.id}`}
+                data-method="PATCH"
+                data-then="none"
+                data-label={`Alt text (photo ${i + 1})`}
+              >
                 <label for={`alt-${p.id}`}>Alt text (describes the photo for screen readers)</label>
                 <input
                   id={`alt-${p.id}`}
@@ -484,6 +485,20 @@ const REASON: Record<string, string> = {
       )}
     </div>
   </section>
+
+  <div class="save-bar" data-save-bar>
+    <p class="save-status" data-save-status role="status">
+      All changes saved.
+    </p>
+    <div class="actions">
+      <button type="button" data-save-all disabled>
+        Save
+      </button>
+      <button type="button" class="primary" data-save-close data-href="/items">
+        Save and close
+      </button>
+    </div>
+  </div>
 </Admin>
 
 <script>

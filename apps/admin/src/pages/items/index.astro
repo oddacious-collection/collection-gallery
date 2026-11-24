@@ -1,6 +1,12 @@
 ---
 import { env } from 'cloudflare:workers';
-import { coverThumbKeys, listItems, type ListItemsOptions } from '@cg/core/admin';
+import {
+  DomainError,
+  coverThumbKeys,
+  getItem,
+  listItems,
+  type ListItemsOptions,
+} from '@cg/core/admin';
 import Admin from '../../layouts/Admin.astro';
 import { STATUS_LABEL, shortDateTime } from '../../lib/format.ts';
 
@@ -19,6 +25,22 @@ const thumbs = await coverThumbKeys(
   env.DB,
   rows.map((r) => r.id),
 );
+// After "Publish" in the editor (?published=<id>): confirm, with a link to the public page.
+const publishedId = Astro.url.searchParams.get('published');
+let published: { title: string; url: string } | null = null;
+if (publishedId) {
+  try {
+    const it = await getItem(env.DB, publishedId);
+    if (it.status === 'public' && it.kind === 'owned' && it.deletedAt === null) {
+      published = {
+        title: it.title,
+        url: new URL(`/item/${encodeURIComponent(it.slug)}`, env.PUBLIC_ORIGIN).href,
+      };
+    }
+  } catch (err) {
+    if (!(err instanceof DomainError)) throw err;
+  }
+}
 const labels: Record<View, string> = {
   all: 'All',
   draft: 'Drafts',
@@ -31,6 +53,11 @@ const labels: Record<View, string> = {
 
 <Admin title={`${labels[view]} · Admin`}>
   <h1>{view === 'trash' ? 'Trash' : 'Items'}</h1>
+  {published && (
+    <p class="message ok-banner" role="status">
+      Published “{published.title}”. <a href={published.url}>View it on the public site</a>.
+    </p>
+  )}
   <nav class="filters" aria-label="Filter items">
     {VIEWS.map((v) => (
       <a

@@ -41,3 +41,14 @@ export function pageFromUrl(url: URL, max = 1000): number {
 }
 
 export const PAGE_SIZE = 24;
+
+/** How a list is shown (PUB-02): the vertical feed or a grid of covers. */
+export type ListView = 'feed' | 'grid';
+
+export function viewFromUrl(url: URL, fallback: ListView): ListView {
+  const v = url.searchParams.get('view');
+  return v === 'feed' || v === 'grid' ? v : fallback;
+}
+
+/** Items per page in the feed layout (more load as you scroll). */
+export const FEED_PAGE_SIZE = 6;

@@ -74,7 +74,7 @@ const SIZES = '(min-width: 46rem) 44rem, 100vw';
   )}
   <div class="item-text">
     <Heading id={headingId} class="item-title">
-      {item.title}
+      {headingLevel === 1 ? item.title : <a href={itemHref(item.slug, context)}>{item.title}</a>}
     </Heading>
     {item.postedAt && (
       <p class="item-date">

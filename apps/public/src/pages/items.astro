@@ -1,27 +1,41 @@
 ---
-/** Every public item, newest first, paged. */
+/** Every public item, newest first: the vertical feed by default, or a grid (?view=grid). */
 import { env } from 'cloudflare:workers';
-import { listContextCards } from '@cg/core/public';
+import { listContextCards, listContextItems, type ListContext } from '@cg/core/public';
 import Base from '../layouts/Base.astro';
 import CardGrid from '../components/CardGrid.astro';
+import FeedList from '../components/FeedList.astro';
 import Pager from '../components/Pager.astro';
-import { PAGE_SIZE, pageFromUrl } from '../lib/context.ts';
+import ViewSwitch from '../components/ViewSwitch.astro';
+import { FEED_PAGE_SIZE, PAGE_SIZE, pageFromUrl, viewFromUrl } from '../lib/context.ts';
 
+const context: ListContext = { kind: 'all' };
+const view = viewFromUrl(Astro.url, 'feed');
 const page = pageFromUrl(Astro.url);
-const { cards, total } = await listContextCards(
-  env.DB,
-  { kind: 'all' },
-  (page - 1) * PAGE_SIZE,
-  PAGE_SIZE,
-);
-if (cards.length === 0 && page > 1) return new Response(null, { status: 404 });
+const size = view === 'feed' ? FEED_PAGE_SIZE : PAGE_SIZE;
+const offset = (page - 1) * size;
+const grid = view === 'grid' ? await listContextCards(env.DB, context, offset, size) : null;
+const feed = view === 'feed' ? await listContextItems(env.DB, context, offset, size) : null;
+const total = grid?.total ?? feed?.total ?? 0;
+const shown = grid?.cards.length ?? feed?.items.length ?? 0;
+if (shown === 0 && page > 1) return new Response(null, { status: 404 });
 ---
 
 <Base title="All items" canonical="/items">
   <h1>All items</h1>
-  <p class="muted">
-    {total} item{total === 1 ? '' : 's'}, newest first.
-  </p>
-  <CardGrid cards={cards} context={{ kind: 'all' }} eagerCount={4} />
-  <Pager page={page} total={total} pageSize={PAGE_SIZE} />
+  <div class="list-head">
+    <p class="list-count muted">
+      {total} item{total === 1 ? '' : 's'}, newest first.
+    </p>
+    <ViewSwitch view={view} defaultView="feed" />
+  </div>
+  {grid && <CardGrid cards={grid.cards} context={context} eagerCount={4} />}
+  {feed && feed.items.length > 0 && (
+    <FeedList items={feed.items} context={context} offset={offset} total={total} contextQuery="" />
+  )}
+  <Pager page={page} total={total} pageSize={size} feed={view === 'feed'} />
 </Base>
+
+<script>
+  import '../scripts/feed.ts';
+</script>

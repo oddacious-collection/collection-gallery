@@ -25,6 +25,10 @@ const PAGES = [
   '/items',
   '/category/meteorites',
   '/category/pallasites',
+  '/category/meteorites?view=grid',
+  '/items?view=grid',
+  '/collections',
+  '/search?q=olivine&view=feed',
   '/item/seymchan-pallasite-slice',
   '/item/seymchan-pallasite-slice?in=meteorites',
   '/item/seymchan-pallasite-slice/photo/1',
@@ -201,7 +205,7 @@ test.describe('item page and feed (PUB-04, PUB-05)', () => {
     await page.getByRole('link', { name: /Next item/ }).click();
     await expect(page).toHaveURL(/\/item\/gibeon-iron-meteorite\?in=meteorites$/);
     await expect(page).toHaveTitle(/^Gibeon iron meteorite/);
-    await expect(page.locator('[data-feed-pos]')).toHaveText('2 of 3');
+    await expect(page.locator('[data-feed-pos]')).toHaveText('2 / 3');
     await page.keyboard.press('ArrowDown');
     await expect(page).toHaveURL(/\/item\/campo-del-cielo-fragment\?in=meteorites$/);
     await expect(page.locator('[data-feed-next]')).toBeHidden();
@@ -241,5 +245,52 @@ test.describe('item page and feed (PUB-04, PUB-05)', () => {
       'href',
       `${PUBLIC}/item/seymchan-pallasite-slice`,
     );
+  });
+});
+
+test.describe('browsing lists (owner feedback 2026-11-24)', () => {
+  test('category pages show the feed by default, with a Grid switch', async ({ page }) => {
+    await page.goto(`${PUBLIC}/category/meteorites`);
+    await expect(page.locator('[data-feed] > article')).toHaveCount(3);
+    await expect(page.getByRole('link', { name: 'Feed' })).toHaveAttribute('aria-current', 'page');
+    await page.getByRole('link', { name: 'Grid' }).click();
+    await expect(page).toHaveURL(/\/category\/meteorites\?view=grid$/);
+    await expect(page.locator('.card-grid .card')).toHaveCount(3);
+    await expect(page.locator('[data-feed]')).toHaveCount(0);
+    // Subcategories are compact links, and keep the chosen view.
+    await expect(
+      page.getByRole('navigation', { name: 'Subcategories' }).getByRole('link'),
+    ).toHaveAttribute('href', '/category/pallasites?view=grid');
+  });
+
+  test('a list feed keeps its own address; the pill follows the item on screen', async ({
+    page,
+  }) => {
+    await page.goto(`${PUBLIC}/items`);
+    await expect(page.locator('[data-feed] > article')).toHaveCount(5);
+    await expect(page.locator('[data-feed-pos]')).toHaveText('1 / 5');
+    await expect(page.locator('[data-feed-prev]')).toBeHidden();
+    await page.getByRole('link', { name: 'Next item' }).click();
+    await expect(page.locator('[data-feed-pos]')).toHaveText('2 / 5');
+    await expect(page).toHaveURL(/\/items$/);
+    // Each title links to its item page, in this list's context.
+    await expect(
+      page.getByRole('link', { name: 'Gibeon iron meteorite', exact: true }),
+    ).toHaveAttribute('href', '/item/gibeon-iron-meteorite');
+  });
+
+  test('home has a way into the feed; the header links to Collections', async ({ page }) => {
+    await page.goto(`${PUBLIC}/`);
+    await page.getByRole('link', { name: /Scroll through everything/ }).click();
+    await expect(page).toHaveURL(/\/items$/);
+    await page
+      .getByRole('navigation', { name: 'Site' })
+      .getByRole('link', { name: 'Collections' })
+      .click();
+    const tree = page.locator('main .tree').first();
+    await expect(tree).toContainText('Meteorites');
+    await expect(tree.locator('.tree.sub')).toContainText('Pallasites');
+    await expect(tree).toContainText('Books');
+    await expect(page.locator('main')).not.toContainText('SENTINEL');
   });
 });

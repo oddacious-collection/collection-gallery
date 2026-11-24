@@ -10,14 +10,24 @@ import { env } from 'cloudflare:workers';
 import {
   SEARCH_MAX_QUERY,
   listContextCards,
+  listContextItems,
   listPublicCategories,
   type CardPage,
+  type PublicItemDetail,
   type ListContext,
 } from '@cg/core/public';
 import Base from '../layouts/Base.astro';
 import CardGrid from '../components/CardGrid.astro';
 import Pager from '../components/Pager.astro';
-import { PAGE_SIZE, pageFromUrl } from '../lib/context.ts';
+import FeedList from '../components/FeedList.astro';
+import ViewSwitch from '../components/ViewSwitch.astro';
+import {
+  FEED_PAGE_SIZE,
+  PAGE_SIZE,
+  contextQuery,
+  pageFromUrl,
+  viewFromUrl,
+} from '../lib/context.ts';
 
 const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, SEARCH_MAX_QUERY);
 const inCategory = Astro.url.searchParams.get('in') ?? '';
@@ -27,6 +37,10 @@ const page = pageFromUrl(Astro.url, 42);
 
 let limited = false;
 let results: CardPage | null = null;
+let feed: { items: PublicItemDetail[]; total: number } | null = null;
+const view = viewFromUrl(Astro.url, 'grid');
+const size = view === 'feed' ? FEED_PAGE_SIZE : PAGE_SIZE;
+const offset = (page - 1) * size;
 const context: ListContext = scope
   ? { kind: 'search', q, category: scope.slug }
   : { kind: 'search', q };
@@ -36,8 +50,11 @@ if (q) {
     limited = true;
     Astro.response.status = 429;
     Astro.response.headers.set('Retry-After', '60');
+  } else if (view === 'feed') {
+    feed = await listContextItems(env.DB, context, offset, size);
+    results = { cards: [], total: feed.total };
   } else {
-    results = await listContextCards(env.DB, context, (page - 1) * PAGE_SIZE, PAGE_SIZE);
+    results = await listContextCards(env.DB, context, offset, size);
   }
 }
 Astro.response.headers.set('Cache-Control', 'no-store');
@@ -73,19 +90,36 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   )}
   {results && (
     <section aria-labelledby="results-h">
-      <h2 id="results-h">
-        {results.total === 0
-          ? 'No matches'
-          : `${results.total} match${results.total === 1 ? '' : 'es'}`}
-      </h2>
+      <div class="list-head">
+        <h2 id="results-h" class="list-count">
+          {results.total === 0
+            ? 'No matches'
+            : `${results.total} match${results.total === 1 ? '' : 'es'}`}
+        </h2>
+        {results.total > 0 && <ViewSwitch view={view} defaultView="grid" />}
+      </div>
       {results.total === 0 ? (
         <p class="muted">Try fewer or shorter words.</p>
       ) : (
         <>
-          <CardGrid cards={results.cards} context={context} eagerCount={4} />
-          <Pager page={page} total={results.total} pageSize={PAGE_SIZE} />
+          {feed ? (
+            <FeedList
+              items={feed.items}
+              context={context}
+              offset={offset}
+              total={feed.total}
+              contextQuery={contextQuery(context)}
+            />
+          ) : (
+            <CardGrid cards={results.cards} context={context} eagerCount={4} />
+          )}
+          <Pager page={page} total={results.total} pageSize={size} feed={view === 'feed'} />
         </>
       )}
     </section>
   )}
 </Base>
+
+<script>
+  import '../scripts/feed.ts';
+</script>

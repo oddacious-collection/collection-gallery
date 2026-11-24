@@ -10,7 +10,7 @@
  * Markup: <section data-photos data-item-id="…"> with
  *   <input type="file" data-photo-input> and <ul data-photo-progress>.
  */
-import { PHOTO_ERROR_TEXT, PhotoError, processPhoto } from './process.ts';
+import { PHOTO_ERROR_TEXT, PhotoError, partLabel, processPhoto } from './process.ts';
 import { encodeWebp } from './webp.ts';
 
 const CSRF = { 'x-cg-request': '1' };
@@ -72,7 +72,7 @@ interface Began {
 
 async function uploadOne(itemId: string, file: File, say: (s: string) => void): Promise<void> {
   const photo = await processPhoto(file, encodeWebp, say);
-  say('Starting upload');
+  say('Starting the upload');
   const began = (await request(
     'POST',
     `/api/items/${encodeURIComponent(itemId)}/media`,
@@ -88,7 +88,7 @@ async function uploadOne(itemId: string, file: File, say: (s: string) => void): 
   let n = 0;
   for (const part of photo.plan) {
     n++;
-    say(`Uploading ${n} of ${photo.plan.length}`);
+    say(`Uploading the ${partLabel(part)} (file ${n} of ${photo.plan.length})`);
     const bytes = photo.files.get(part.name);
     if (!bytes) throw new UploadError('A processed file is missing.');
     await request(
@@ -98,7 +98,7 @@ async function uploadOne(itemId: string, file: File, say: (s: string) => void): 
       part.format,
     );
   }
-  say('Finishing');
+  say('Attaching the photo to the item');
   await request(
     'POST',
     `/api/uploads/${encodeURIComponent(began.uploadId)}/finalize`,
@@ -128,8 +128,11 @@ function init(section: HTMLElement): void {
       let added = 0;
       for (const [i, file] of files.entries()) {
         const li = rows[i] as HTMLLIElement;
+        const counter = files.length > 1 ? ` (photo ${i + 1} of ${files.length})` : '';
+        let step = 'Waiting';
         const say = (s: string) => {
-          li.textContent = `${file.name}: ${s}…`;
+          step = s;
+          li.textContent = `${file.name}${counter}: ${s}…`;
         };
         try {
           await uploadOne(itemId, file, say);
@@ -137,13 +140,14 @@ function init(section: HTMLElement): void {
           li.classList.add('ok');
           added++;
         } catch (err) {
-          li.textContent = `${file.name}: ${
+          const reason =
             err instanceof PhotoError
               ? PHOTO_ERROR_TEXT[err.code]
               : err instanceof UploadError
                 ? err.message
-                : 'Something went wrong. Nothing was added.'
-          }`;
+                : 'Something went wrong. Nothing was added.';
+          // Say where it stopped, so a problem can be traced.
+          li.textContent = `${file.name}: ${reason} (Stopped at: ${step}.)`;
           li.classList.add('error');
           if (!(err instanceof PhotoError) && !(err instanceof UploadError)) console.error(err);
         }

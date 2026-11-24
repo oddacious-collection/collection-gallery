@@ -1,0 +1,39 @@
+---
+/**
+ * The feed's on-screen previous/next controls (PUB-05, NFR-03): a small pill
+ * in the corner. Mouse and touch users mostly scroll; keyboard and screen
+ * reader users rely on these. Plain links without JavaScript; scripts/feed.ts
+ * keeps them in step with the item on screen.
+ */
+interface Props {
+  position: number;
+  total: number;
+  prevHref: string | null;
+  nextHref: string | null;
+}
+const { position, total, prevHref, nextHref } = Astro.props;
+---
+
+<nav class="feed-controls" aria-label="Items in this list" data-feed-controls>
+  <a
+    href={prevHref ?? undefined}
+    rel="prev"
+    data-feed-prev
+    hidden={!prevHref}
+    aria-label="Previous item"
+  >
+    <span aria-hidden="true">▲</span>
+  </a>
+  <span class="feed-pos" data-feed-pos>
+    {position + 1} / {total}
+  </span>
+  <a
+    href={nextHref ?? undefined}
+    rel="next"
+    data-feed-next
+    hidden={!nextHref}
+    aria-label="Next item"
+  >
+    <span aria-hidden="true">▼</span>
+  </a>
+</nav>
