@@ -18,6 +18,8 @@
   "assets": { "run_worker_first": true },
   // PRV-04: keep only our own structured logs (no IPs or PII).
   "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  // ADM-04: daily purge of items in the trash for more than 30 days.
+  "triggers": { "crons": ["17 4 * * *"] },
   // Local values only. In deployed environments ADMIN_EMAIL is a Worker secret
   // set by the owner (`wrangler secret put ADMIN_EMAIL --env staging`).
   "vars": {
@@ -51,6 +53,7 @@
       "workers_dev": true,
       "preview_urls": false,
       "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+      "triggers": { "crons": ["17 4 * * *"] },
       "vars": {
         "ENVIRONMENT": "staging",
         "ADMIN_ORIGIN": "SET_AT_DEPLOY",

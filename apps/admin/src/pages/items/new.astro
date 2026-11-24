@@ -1,0 +1,25 @@
+---
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="New item · Admin">
+  <h1>New item</h1>
+  <form class="card" data-api="/api/items" data-method="POST" data-then="redirect:/items/{id}">
+    <label for="title">Title</label>
+    <input id="title" name="title" type="text" required maxlength="200" autocomplete="off" />
+    <label for="kind">Kind</label>
+    <select id="kind" name="kind">
+      <option value="owned" selected>
+        In my collection
+      </option>
+      <option value="wishlist">Wishlist (never public)</option>
+    </select>
+    <p class="hint">It starts as a private draft. Add photos and categories, then publish.</p>
+    <p data-api-message role="status"></p>
+    <div class="actions">
+      <button class="primary" type="submit">
+        Create draft
+      </button>
+    </div>
+  </form>
+</Admin>

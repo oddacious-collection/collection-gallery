@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin-dev",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev:admin"],
+      "port": 4322
+    },
+    {
+      "name": "public-dev",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev:public"],
+      "port": 4321
+    }
+  ]
+}

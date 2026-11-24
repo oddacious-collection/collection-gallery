@@ -15,7 +15,8 @@
   "dependencies": {
     "@astrojs/cloudflare": "14.4.8",
     "@cg/core": "*",
-    "astro": "7.4.12"
+    "astro": "7.4.12",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",

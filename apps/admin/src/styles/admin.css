@@ -1,9 +1,17 @@
 :root {
   color-scheme: light dark;
   --bg: #f6f7f9;
+  --surface: #ffffff;
   --fg: #16181d;
   --muted: #4f5561;
+  --line: #d5d9e0;
   --accent: #1f5fbf;
+  --accent-fg: #ffffff;
+  --danger: #b3261e;
+  --ok: #1e6b35;
+  --public: #1e6b35;
+  --private: #6b4b1e;
+  --draft: #4f5561;
   font-family:
     system-ui,
     -apple-system,
@@ -16,10 +24,22 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #121418;
+    --surface: #1b1e24;
     --fg: #e9ebef;
     --muted: #a9afba;
+    --line: #333944;
     --accent: #7fb0ff;
+    --accent-fg: #0c1424;
+    --danger: #ff8a80;
+    --ok: #7fd49b;
+    --public: #7fd49b;
+    --private: #e3b97a;
+    --draft: #a9afba;
   }
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -28,14 +48,284 @@ body {
   color: var(--fg);
 }
 
-main {
-  max-width: 48rem;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+a {
+  color: var(--accent);
 }
 
-p {
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.topbar nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.topbar nav a {
+  text-decoration: none;
+  padding: 0.25rem 0;
+}
+
+.topbar nav a[aria-current='page'] {
+  font-weight: 700;
+  border-bottom: 2px solid var(--accent);
+}
+
+main {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 4rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.muted,
+.hint {
   color: var(--muted);
+}
+
+.hint {
+  font-size: 0.875rem;
+  margin: 0.25rem 0 0;
+}
+
+.message:empty {
+  display: none;
+}
+
+.message {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--ok);
+}
+
+.message.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+
+label.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input[type='text'],
+input[type='date'],
+select,
+textarea {
+  width: 100%;
+  min-height: 2.75rem; /* comfortable touch target on iPhone */
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+textarea {
+  min-height: 10rem;
+  resize: vertical;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0 1rem;
+}
+
+button {
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.small {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.6rem;
+}
+
+button[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+
+.badge.public {
+  color: var(--public);
+}
+
+.badge.private {
+  color: var(--private);
+}
+
+.badge.draft,
+.badge.wishlist,
+.badge.trash {
+  color: var(--draft);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.filters a[aria-current='page'] {
+  font-weight: 700;
+}
+
+.item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.item-list .title {
+  flex: 1 1 14rem;
+  font-weight: 600;
+}
+
+.status-box {
+  border-width: 2px;
+}
+
+.status-box.public {
+  border-color: var(--public);
+}
+
+.checks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.checks li {
+  margin: 0.15rem 0;
+}
+
+.tree,
+.tree ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.tree ul {
+  padding-left: 1.25rem;
+  border-left: 2px solid var(--line);
+  margin-left: 0.5rem;
+}
+
+.tree li {
+  margin: 0.5rem 0;
+}
+
+.tree .node {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tree details {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.diff {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
 }
 
 :focus-visible {

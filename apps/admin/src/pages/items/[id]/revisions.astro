@@ -1,0 +1,109 @@
+---
+import { env } from 'cloudflare:workers';
+import { DomainError, getItem, listCategoryTree, listRevisions } from '@cg/core/admin';
+import type { RevisionSnapshot } from '@cg/core/admin';
+import Admin from '../../../layouts/Admin.astro';
+import { shortDateTime } from '../../../lib/format.ts';
+
+const id = String(Astro.params['id']);
+let item;
+try {
+  item = await getItem(env.DB, id);
+} catch (err) {
+  if (err instanceof DomainError && err.code === 'not_found') {
+    return new Response(null, { status: 404 });
+  }
+  throw err;
+}
+const [revisions, tree] = await Promise.all([listRevisions(env.DB, id), listCategoryTree(env.DB)]);
+const categoryName = new Map(tree.map((c) => [c.id, c.name]));
+
+const FIELD_LABEL: Record<string, string> = {
+  title: 'Title',
+  description: 'Description',
+  slug: 'URL name',
+  kind: 'Kind',
+  status: 'Visibility',
+  postedAt: 'Posted at',
+  licenseOverride: 'License',
+  watermarkOverride: 'Watermark',
+  purchasePriceCents: 'Purchase price',
+  purchaseCurrency: 'Currency',
+  purchaseDate: 'Purchase date',
+  openToParting: 'Open to parting with',
+  deletedAt: 'Trash',
+};
+
+function short(value: unknown, key = ''): string {
+  if (value === null || value === undefined || value === '') return '(empty)';
+  if (key === 'purchasePriceCents' && typeof value === 'number') return (value / 100).toFixed(2);
+  const s = String(value);
+  return s.length > 80 ? `${s.slice(0, 77)}…` : s;
+}
+
+/** Human-readable changes from the previous snapshot to this one. */
+function changes(prev: RevisionSnapshot | undefined, cur: RevisionSnapshot): string[] {
+  if (!prev) return ['Created'];
+  const out: string[] = [];
+  for (const [key, label] of Object.entries(FIELD_LABEL)) {
+    const a = prev.item[key as keyof RevisionSnapshot['item']];
+    const b = cur.item[key as keyof RevisionSnapshot['item']];
+    if (JSON.stringify(a) !== JSON.stringify(b)) {
+      out.push(
+        key === 'description'
+          ? `${label} changed`
+          : `${label}: ${short(a, key)} → ${short(b, key)}`,
+      );
+    }
+  }
+  const names = (ids: string[]) =>
+    ids.map((i) => categoryName.get(i) ?? '(deleted)').join(', ') || '(none)';
+  if (prev.categoryIds.join() !== cur.categoryIds.join()) {
+    out.push(`Categories: ${names(prev.categoryIds)} → ${names(cur.categoryIds)}`);
+  }
+  if (prev.tagIds.join() !== cur.tagIds.join()) out.push('Tags changed');
+  if (prev.mediaIds.join() !== cur.mediaIds.join()) out.push('Photos changed');
+  return out.length > 0 ? out : ['No visible change'];
+}
+// Oldest first for diffing, shown newest first.
+const ordered = [...revisions].reverse();
+const rows = ordered
+  .map((r, i) => ({ ...r, changes: changes(ordered[i - 1]?.snapshot, r.snapshot) }))
+  .reverse();
+---
+
+<Admin title={`History · ${item.title} · Admin`}>
+  <p>
+    <a href={`/items/${id}`}>← {item.title}</a>
+  </p>
+  <h1>Revision history</h1>
+  <p class="hint">
+    Every save is kept. Restoring brings back the text, details, categories and tags from that
+    point; it never changes whether the item is public.
+  </p>
+  <ul class="item-list">
+    {rows.map((r, i) => (
+      <li>
+        <span class="title">
+          {shortDateTime(r.createdAt)}
+          {i === 0 && <span class="hint"> (current)</span>}
+          <ul class="diff">
+            {r.changes.map((c) => (
+              <li>{c}</li>
+            ))}
+          </ul>
+        </span>
+        {i > 0 && (
+          <button
+            class="small"
+            data-api={`/api/revisions/${r.id}/restore`}
+            data-then={`redirect:/items/${id}`}
+            data-confirm="Restore this version's content? The current version stays in the history."
+          >
+            Restore
+          </button>
+        )}
+      </li>
+    ))}
+  </ul>
+</Admin>
