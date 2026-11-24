@@ -209,7 +209,7 @@ const REASON: Record<string, string> = {
     </h2>
     <div class="row">
       <div>
-        <label for="purchasePriceCents">Purchase price</label>
+        <label for="purchasePriceCents">Purchase price (USD)</label>
         <input
           id="purchasePriceCents"
           name="purchasePriceCents"
@@ -217,18 +217,6 @@ const REASON: Record<string, string> = {
           inputmode="decimal"
           data-type="cents"
           value={centsToInput(item.purchasePriceCents)}
-        />
-      </div>
-      <div>
-        <label for="purchaseCurrency">Currency</label>
-        <input
-          id="purchaseCurrency"
-          name="purchaseCurrency"
-          type="text"
-          maxlength="3"
-          data-type="nullable"
-          placeholder="USD"
-          value={item.purchaseCurrency ?? ''}
         />
       </div>
       <div>

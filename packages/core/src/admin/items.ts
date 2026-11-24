@@ -61,6 +61,16 @@ function defined<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[K], und
   };
 }
 
+/**
+ * Prices are in US dollars (D-57): a price without a currency is stored as
+ * USD. The column stays (a constant costs nothing), but the admin no longer
+ * asks for it.
+ */
+export const DEFAULT_CURRENCY = 'USD';
+function withCurrency(priceCents: number | null, currency: string | null): string | null {
+  return priceCents !== null && currency === null ? DEFAULT_CURRENCY : currency;
+}
+
 async function getRow(db: Db, id: string): Promise<ItemRow> {
   const [row] = await db.select().from(items).where(eq(items.id, id)).limit(1);
   if (!row) throw new DomainError('not_found');
@@ -302,7 +312,7 @@ export async function createItem(
     licenseOverride: data.licenseOverride,
     watermarkOverride: data.watermarkOverride,
     purchasePriceCents: data.purchasePriceCents,
-    purchaseCurrency: data.purchaseCurrency,
+    purchaseCurrency: withCurrency(data.purchasePriceCents, data.purchaseCurrency),
     purchaseDate: data.purchaseDate,
     openToParting: data.openToParting,
     sourceCaption: data.sourceCaption,
@@ -342,6 +352,7 @@ export async function updateItem(
       : {}),
     updatedAt: at,
   };
+  next.purchaseCurrency = withCurrency(next.purchasePriceCents, next.purchaseCurrency);
 
   if (next.slug !== current.slug) {
     if (await slugTaken(db, next.slug, id))
