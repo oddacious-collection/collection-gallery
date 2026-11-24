@@ -332,3 +332,76 @@ button[aria-busy='true'] {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Photos on the item editor (ADM-03). */
+.photos {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.photos > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.photos img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.photo-tools {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.photo-tools .actions {
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.photos.removed > li {
+  align-items: center;
+}
+
+a.small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.photo-progress {
+  padding-left: 1.25rem;
+}
+
+.photo-progress .ok {
+  color: var(--ok);
+}
+
+.photo-progress .error {
+  color: var(--danger);
+}
+
+input[type='file'] {
+  display: block;
+  margin: 0.25rem 0 0.5rem;
+  max-width: 100%;
+}
+
+.item-list .thumb {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg);
+  flex: none;
+}

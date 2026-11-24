@@ -59,7 +59,10 @@ export function permissionsPolicy(host: HostKind): string {
 export function contentSecurityPolicy(opts: HeaderOptions): string {
   const directives: string[] = [
     "default-src 'none'",
-    "script-src 'self'",
+    // Admin compiles the WebP encoder (WebAssembly) in the browser (D-44).
+    // 'wasm-unsafe-eval' allows WebAssembly compilation only; JavaScript
+    // eval and inline scripts stay blocked. Public never gets it.
+    opts.host === 'admin' ? "script-src 'self' 'wasm-unsafe-eval'" : "script-src 'self'",
     "style-src 'self'",
     "img-src 'self'",
     "font-src 'self'",

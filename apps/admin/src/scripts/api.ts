@@ -84,6 +84,7 @@ const REASONS: Record<string, string> = {
   has_children: 'it has subcategories',
   has_items: 'items are still in it',
   cycle: "a category can't go inside itself or its own subcategories",
+  order_mismatch: 'the photo list changed; reload the page',
 };
 
 function describeError(status: number, data: Record<string, unknown>): string {
@@ -182,6 +183,26 @@ document.addEventListener('click', (event) => {
     }
   }
   void send(button, button.dataset['api'] ?? '', button.dataset['method'] ?? 'POST', body);
+});
+
+// Photo order buttons (ADM-03): up, down, or "make cover" (move to the top).
+document.addEventListener('click', (event) => {
+  const button = (event.target as Element | null)?.closest('button[data-photo-move]');
+  if (!(button instanceof HTMLButtonElement)) return;
+  const row = button.closest('[data-media-id]');
+  const list = row?.parentElement;
+  const itemId = list?.dataset['itemId'];
+  if (!row || !list || !itemId) return;
+  const dir = button.dataset['photoMove'];
+  if (dir === 'first') list.insertBefore(row, list.firstElementChild);
+  else if (dir === 'up' && row.previousElementSibling)
+    list.insertBefore(row, row.previousElementSibling);
+  else if (dir === 'down' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
+  else return;
+  const order = Array.from(list.children)
+    .map((c) => (c as HTMLElement).dataset['mediaId'])
+    .filter((x): x is string => Boolean(x));
+  void send(button, `/api/items/${encodeURIComponent(itemId)}/media/order`, 'PUT', { order });
 });
 
 // Reorder buttons for category siblings: move the row, then send the new order.

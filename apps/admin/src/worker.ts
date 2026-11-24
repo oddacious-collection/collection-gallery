@@ -3,11 +3,16 @@
  * `run_worker_first` — static assets) goes through the admin pipeline, which
  * validates the Cloudflare Access JWT before anything else runs (SEC-03).
  *
- * The daily Cron Trigger purges items that have been in the trash for more
+ * The daily Cron Trigger purges items and photos that have been in the trash for more
  * than 30 days (ADM-04).
  */
 import { handle } from '@astrojs/cloudflare/handler';
-import { createAdminPipeline, purgeExpiredTrash } from '@cg/core/admin';
+import {
+  cleanupStaleUploads,
+  createAdminPipeline,
+  purgeExpiredTrash,
+  purgeRemovedMedia,
+} from '@cg/core/admin';
 import { createDevPipeline } from './dev-only.ts';
 
 // `import.meta.env.DEV` is a build-time constant: true only under `astro dev`.
@@ -18,7 +23,13 @@ const fetch = import.meta.env.DEV
   : createAdminPipeline<Env>(handle);
 
 const scheduled: ExportedHandlerScheduledHandler<Env> = async (_controller, env, ctx) => {
-  ctx.waitUntil(purgeExpiredTrash(env.DB, env));
+  ctx.waitUntil(
+    (async () => {
+      await purgeExpiredTrash(env.DB, env);
+      await purgeRemovedMedia(env.DB, env);
+      await cleanupStaleUploads(env.DB, env);
+    })(),
+  );
 };
 
 export default { fetch, scheduled } satisfies ExportedHandler<Env>;

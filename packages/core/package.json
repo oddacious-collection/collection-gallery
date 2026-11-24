@@ -8,6 +8,7 @@
     "./errors": "./src/errors.ts",
     "./public": "./src/public/index.ts",
     "./admin": "./src/admin/index.ts",
+    "./media": "./src/media/index.ts",
     "./db/schema": "./src/db/schema.ts"
   },
   "scripts": {

@@ -1,6 +1,6 @@
 ---
 import { env } from 'cloudflare:workers';
-import { listItems, type ListItemsOptions } from '@cg/core/admin';
+import { coverThumbKeys, listItems, type ListItemsOptions } from '@cg/core/admin';
 import Admin from '../../layouts/Admin.astro';
 import { STATUS_LABEL, shortDateTime } from '../../lib/format.ts';
 
@@ -15,6 +15,10 @@ else if (view === 'wishlist') opts.kind = 'wishlist';
 else if (view !== 'all') opts.status = view;
 
 const rows = await listItems(env.DB, opts);
+const thumbs = await coverThumbKeys(
+  env.DB,
+  rows.map((r) => r.id),
+);
 const labels: Record<View, string> = {
   all: 'All',
   draft: 'Drafts',
@@ -50,6 +54,17 @@ const labels: Record<View, string> = {
     <ul class="item-list">
       {rows.map((item) => (
         <li>
+          {thumbs.has(item.id) ? (
+            <img
+              class="thumb"
+              src={`/media/${thumbs.get(item.id)}`}
+              width="48"
+              height="48"
+              alt=""
+            />
+          ) : (
+            <span class="thumb" aria-hidden="true"></span>
+          )}
           <span class="title">
             <a href={`/items/${item.id}`}>{item.title}</a>
           </span>
