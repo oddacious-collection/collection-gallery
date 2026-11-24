@@ -1,0 +1,111 @@
+---
+/**
+ * One item as shown on its page and in the vertical feed (PUB-04, PUB-05):
+ * the photo carousel, then title, date, description, categories and tags.
+ *
+ * The carousel works without JavaScript (swipe/scroll with snapping; each
+ * photo links to its full-screen view); scripts/feed.ts adds arrows, dots,
+ * keyboard control and the feed itself.
+ */
+import { renderMarkdown, type ListContext, type PublicItemDetail } from '@cg/core/public';
+import { itemHref } from '../lib/context.ts';
+import { formatDate } from '../lib/site.ts';
+import Photo from './Photo.astro';
+
+interface Props {
+  item: PublicItemDetail;
+  context: ListContext;
+  /** The item page's own item is the h1; items added by the feed are h2. */
+  headingLevel: 1 | 2;
+  eager?: boolean;
+}
+const { item, context, headingLevel, eager = false } = Astro.props;
+const Heading = headingLevel === 1 ? 'h1' : 'h2';
+const headingId = `t-${item.slug}`;
+const many = item.media.length > 1;
+const SIZES = '(min-width: 46rem) 44rem, 100vw';
+---
+
+<article
+  class="item"
+  data-item
+  data-slug={item.slug}
+  data-url={itemHref(item.slug, context)}
+  data-title={item.title}
+  aria-labelledby={headingId}
+>
+  {item.media.length > 0 && (
+    <div class="carousel" data-carousel>
+      <ul class="slides" aria-label={`Photos of ${item.title}`} tabindex="0">
+        {item.media.map((img, i) => (
+          <li
+            class="slide"
+            aria-label={many ? `Photo ${i + 1} of ${item.media.length}` : undefined}
+          >
+            <a
+              href={`/item/${encodeURIComponent(item.slug)}/photo/${i + 1}`}
+              aria-label={`View photo ${i + 1} full screen`}
+            >
+              <Photo image={img} sizes={SIZES} eager={eager && i === 0} />
+            </a>
+          </li>
+        ))}
+      </ul>
+      {many && (
+        <>
+          <button
+            type="button"
+            class="carousel-btn prev"
+            data-prev
+            aria-label="Previous photo"
+            hidden
+          >
+            ‹
+          </button>
+          <button type="button" class="carousel-btn next" data-next aria-label="Next photo" hidden>
+            ›
+          </button>
+          <p class="carousel-count" data-count aria-live="polite">
+            1 / {item.media.length}
+          </p>
+        </>
+      )}
+    </div>
+  )}
+  <div class="item-text">
+    <Heading id={headingId} class="item-title">
+      {item.title}
+    </Heading>
+    {item.postedAt && (
+      <p class="item-date">
+        <time datetime={item.postedAt}>{formatDate(item.postedAt)}</time>
+      </p>
+    )}
+    {item.description && (
+      <div class="prose" set:html={renderMarkdown(item.description, { headingBase: 3 })} />
+    )}
+    {item.categories.length > 0 && (
+      <ul class="item-cats" aria-label="Categories">
+        {item.categories.map((c) => (
+          <li>
+            {c.trail.map((step, i) => (
+              <>
+                {i > 0 && <span aria-hidden="true"> › </span>}
+                <a href={`/category/${encodeURIComponent(step.slug)}`}>{step.name}</a>
+              </>
+            ))}
+          </li>
+        ))}
+      </ul>
+    )}
+    {item.tags.length > 0 && (
+      <ul class="item-tags" aria-label="Tags">
+        {item.tags.map((t) => (
+          <li>
+            <a href={`/search?q=${encodeURIComponent(t)}`}>#{t}</a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</article>

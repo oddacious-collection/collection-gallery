@@ -8,11 +8,11 @@ import { expect, test } from '@playwright/test';
 import { PUBLIC, expectNoCookies, expectSecurityHeaders } from './helpers.ts';
 
 test.describe('public site', () => {
-  test('home page renders hello world', async ({ page }) => {
+  test('home page renders', async ({ page }) => {
     const res = await page.goto(`${PUBLIC}/`);
     expect(res?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Collection Gallery');
-    await expect(page.getByText('Hello, world')).toBeVisible();
+    await expect(page.getByText('collection of collections')).toBeVisible();
   });
 
   test('home page has no accessibility violations', async ({ page }) => {

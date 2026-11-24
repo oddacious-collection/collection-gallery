@@ -15,6 +15,7 @@ import { ulid } from '../ids.ts';
 import { SLUG_MAX_LENGTH, SLUG_PATTERN, slugify, uniqueSlug } from '../slug.ts';
 import { audit, run, type Db, type Op } from './db-util.ts';
 import { DomainError } from './domain-error.ts';
+import { reindexCategoryOps } from './search-index.ts';
 
 export type CategoryRow = typeof categories.$inferSelect;
 
@@ -188,6 +189,7 @@ export async function updateCategory(
       })
       .where(eq(categories.id, categoryId)),
     audit(db, 'category', actor, 'category.update', categoryId, { changed: Object.keys(data) }, at),
+    ...(next.name !== current.name ? reindexCategoryOps(db, categoryId) : []),
   ]);
   return next;
 }
@@ -253,6 +255,8 @@ export async function moveCategory(
       at,
     ),
   );
+  // Ancestor names are indexed, so every item under the moved subtree changes.
+  ops.push(...reindexCategoryOps(db, categoryId));
   await run(db, ops);
 }
 

@@ -1,0 +1,27 @@
+---
+/** Every public item, newest first, paged. */
+import { env } from 'cloudflare:workers';
+import { listContextCards } from '@cg/core/public';
+import Base from '../layouts/Base.astro';
+import CardGrid from '../components/CardGrid.astro';
+import Pager from '../components/Pager.astro';
+import { PAGE_SIZE, pageFromUrl } from '../lib/context.ts';
+
+const page = pageFromUrl(Astro.url);
+const { cards, total } = await listContextCards(
+  env.DB,
+  { kind: 'all' },
+  (page - 1) * PAGE_SIZE,
+  PAGE_SIZE,
+);
+if (cards.length === 0 && page > 1) return new Response(null, { status: 404 });
+---
+
+<Base title="All items" canonical="/items">
+  <h1>All items</h1>
+  <p class="muted">
+    {total} item{total === 1 ? '' : 's'}, newest first.
+  </p>
+  <CardGrid cards={cards} context={{ kind: 'all' }} eagerCount={4} />
+  <Pager page={page} total={total} pageSize={PAGE_SIZE} />
+</Base>

@@ -32,12 +32,20 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - editor: add photos (camera or library on iPhone), thumbnails, alt text, make cover, ↑/↓, remove (restorable 30 days), download the private master; cover thumbnails in the item list;
    - daily cron also purges photos removed > 30 days and uploads unfinished > 24 h;
    - admin CSP adds `'wasm-unsafe-eval'` only (D-44); migration `0002_media_uploads`.
-5. [ ] Public site:
-   - home, category pages (descendants included), item page with carousel and full-screen view, vertical feed (PUB-05);
-   - search (FTS5, public data only, rate-limited, PUB-08);
-   - media serving with a visibility check and Range support (MED-10);
-   - identical 404s (PUB-15), slug 301s, basic Open Graph.
-6. [ ] Privacy-leak suite (TST-02): a local deploy gate in CI, plus a crawl of staging after deploy using seeded sentinels.
+5. [x] Public site (PUB-01/04/05/07/08/15, MED-10; D-53, D-54; unit tests 169 → 183, e2e 25 → 44 per browser):
+   - home (collections with covers, recently posted), all items, category pages (breadcrumbs, subcategories, items including subcategories with a toggle), paging;
+   - item page with a swipeable photo carousel (arrows, ←/→, counter) and a full-screen photo view; restricted Markdown descriptions; category trails and tags;
+   - vertical feed: neighbouring items load as you scroll (2 ahead), the URL follows the item on screen, ↑/↓ and on-screen buttons, Back returns to the list; plain links without JavaScript (1.8 KB of JS, gzipped);
+   - search (FTS5 index of public data only, kept in sync in the same batch as every admin change; words-only queries; rate-limited, D-53);
+   - photo files served only for public items, with Range and conditional requests (MED-10);
+   - identical 404 for every non-public or unknown item, category or photo; old slugs 301; canonical URLs and basic Open Graph;
+   - local seed data with sentinels (`npm run db:seed:local`), used by CI e2e.
+     5b. [ ] Photo inbox (D-55, owner request 2026-11-24):
+   - bulk upload into an admin-only inbox (same pipeline and checks); thumbnail grid of unused photos;
+   - select photos → create a draft (title + remembered categories) or add to an existing item ("Add from inbox" in the editor);
+   - "Recently used" list linking to items; soft remove with 30-day restore;
+   - privacy: inbox photos are never public (covered by step 6).
+6. [ ] Privacy-leak suite (TST-02): a local deploy gate in CI, plus a crawl of staging after deploy using seeded sentinels (inbox photos included).
 7. [ ] Backups (D-47):
    - backup Worker: nightly database JSON export and media sync to B2 with Object Lock;
    - failure email; `backup:verify` plus a weekly CI check;
@@ -199,6 +207,7 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 - `ADMIN_EMAIL` is split from the contact-form address (D-28).
 - `npm audit` is used instead of OSV-Scanner (D-36).
 - Photo files are verified as each one arrives, before storage, rather than only at finalize (stricter; D-51). Removing a single photo is soft with a 30-day restore (D-51).
+- Search is rate-limited with one shared key per location instead of per visitor (D-53). Categories without public items are hidden (D-54).
 
 ### Known advisories (accepted, dev-only, below the high/critical CI gate)
 

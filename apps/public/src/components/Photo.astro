@@ -1,0 +1,30 @@
+---
+/**
+ * One responsive public photo (MED-05): WebP sizes in srcset, explicit width
+ * and height so nothing shifts while loading (NFR-01).
+ */
+import type { PublicImage } from '@cg/core/public';
+import { srcset, sourceFor } from '../lib/images.ts';
+
+interface Props {
+  image: PublicImage;
+  sizes: string;
+  /** The first photo on screen loads at once; everything else lazily. */
+  eager?: boolean;
+  class?: string;
+}
+const { image, sizes, eager = false, class: className } = Astro.props;
+---
+
+<img
+  class={className}
+  src={sourceFor(image, 800)}
+  srcset={srcset(image)}
+  sizes={sizes}
+  width={image.width}
+  height={image.height}
+  alt={image.alt}
+  loading={eager ? 'eager' : 'lazy'}
+  decoding="async"
+  fetchpriority={eager ? 'high' : 'auto'}
+/>

@@ -27,6 +27,27 @@ export {
   type PublicItemLookup,
   type PublicItemPage,
 } from './items.ts';
+export {
+  SEARCH_MAX_QUERY,
+  SEARCH_MAX_RESULTS,
+  categoryCovers,
+  categoryTrail,
+  contextPosition,
+  getPublicItemDetail,
+  listContextCards,
+  listContextItems,
+  listPublicCategories,
+  toFtsQuery,
+  type CardPage,
+  type ListContext,
+  type PublicCard,
+  type PublicCategory,
+  type PublicImage,
+  type PublicImageSource,
+  type PublicItemDetail,
+} from './catalog.ts';
+export { MEDIA_CACHE_CONTROL, parseRange, servePublicMedia } from './media.ts';
+export { escapeHtml, markdownToText, renderInline, renderMarkdown, safeHref } from './markdown.ts';
 
 /** Settings keys that may appear on public pages. Everything else is admin-only. */
 export const PUBLIC_SETTING_KEYS = ['owner_name', 'default_license'] as const;

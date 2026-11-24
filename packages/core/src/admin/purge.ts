@@ -15,6 +15,7 @@ import { logEvent } from '../errors.ts';
 import { audit, run, type Db } from './db-util.ts';
 import { DomainError } from './domain-error.ts';
 import { uploadKeysForItems } from './media.ts';
+import { unindexItemsOps } from './search-index.ts';
 
 export const TRASH_RETENTION_DAYS = 30;
 export const PURGE_ACTOR = 'system:trash-purge';
@@ -77,6 +78,7 @@ async function purge(
   const { publicKeys, privateKeys } = await storageKeys(db, itemIds);
   await run(db, [
     ...itemIds.map((id) => audit(db, 'item', actor, 'item.purge', id, {}, at)),
+    ...unindexItemsOps(db, itemIds),
     db.delete(items).where(inArray(items.id, itemIds)),
   ]);
   await deleteObjects(buckets.MEDIA_PUBLIC, publicKeys, 'public');
