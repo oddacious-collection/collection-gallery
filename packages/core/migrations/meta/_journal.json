@@ -8,6 +8,13 @@
       "when": 1794633651211,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795497051808,
+      "tag": "0001_m1_data_model",
+      "breakpoints": true
     }
   ]
 }

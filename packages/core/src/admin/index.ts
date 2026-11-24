@@ -17,6 +17,14 @@ import { verifyAccessRequest, type AccessVerifyOptions } from './access.ts';
 export { verifyAccessRequest, accessKeySet, ACCESS_JWT_HEADER } from './access.ts';
 export { AdminConfigSchema, type AdminConfig } from './config.ts';
 export type { AccessResult, AccessFailure, AccessVerifyOptions } from './access.ts';
+export * from './items.ts';
+export { DomainError, type DomainErrorCode } from './domain-error.ts';
+export {
+  ItemCreate,
+  ItemUpdate,
+  type ItemCreateInput,
+  type ItemUpdateInput,
+} from './validation.ts';
 
 /** Custom header that admin client code sends on every state-changing request. */
 export const CSRF_HEADER = 'x-cg-request';
