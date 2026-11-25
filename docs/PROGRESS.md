@@ -48,11 +48,12 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
 - privacy: inbox photos live in their own table, which no public query reads; core and e2e tests confirm none of their files are reachable publicly.
 
 6. [x] Privacy-leak suite (TST-02, D-56): sentinel seed (`tests/leak/sentinels.sql`) covering every admin-only column, hidden items of each kind, private photos, an inbox photo and a private old slug; a crawler over every page, photo, search and feed fragment, also checking all private storage keys and internal IDs from the database; two phases with items flipped private ↔ public; a self-check that proves it catches a planted leak. Runs in CI as a deploy gate (`npm run leak:local`) and against staging after every deploy (`npm run leak:staging`).
-7. [~] Backups (D-47, D-58), code done 2026-11-24; live once the owner completes `docs/runbooks/backup-setup.md`:
+7. [x] Backups (D-47, D-58), live on staging 2026-11-25 (first daily, monthly and full photo copies verified by `backup:verify`):
    - backup Worker `cg-backup-staging` (routeless, hourly cron): database export to B2 once a day (`daily/`, locked 30 days) and once a month (`monthly/`, locked 365 days); `media-private` synced to a versioned bucket (locked 365 days; deleted originals hidden, kept a year); SSE-B2; the job key can't delete; email alert on failure (Cloudflare Email Sending);
    - `npm run backup:verify` (newest export fresh and readable, monthly copy present, every private original in the backup) plus a weekly GitHub workflow, gated on `BACKUPS_ENABLED`;
    - `npm run db:export` / `db:restore` (round trip tested: export, wipe, restore, identical);
-   - runbooks: backup-setup, restore-db, restore-media, emergency-purge, rotate-secrets (BAK-07).
+   - runbooks: backup-setup, restore-db (with troubleshooting for alert emails), restore-media, emergency-purge, rotate-secrets (BAK-07);
+   - B2 calls retry timeouts and busy answers (408, 429, 5xx: a 524 stopped the first run); one photo that still fails no longer stops the others, and the run then alerts. Uses B2 native API v4 (keys limited to two buckets need it).
 8. [ ] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review.
 
 ### Owner feedback
@@ -66,11 +67,11 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
 
 Claude gives click-by-click steps when each is needed.
 
-- [ ] O-05: Backblaze B2 account (steps: `docs/runbooks/backup-setup.md` parts A1 to A3, then B):
+- [x] O-05 (done 2026-11-25): Backblaze B2 account (steps: `docs/runbooks/backup-setup.md` parts A1 to A3, then B):
   - TOTP 2FA, SMS fallback off, backup codes offline;
   - two staging buckets with Object Lock and encryption;
   - job key (write-and-lock, no delete), read-only verify key, break-glass key kept offline.
-- [ ] O-06 (part, moved to M1): onboard the domain to Cloudflare Email Sending for backup alerts (D-58; Email Routing stays off). Steps: `docs/runbooks/backup-setup.md` part A4.
+- [x] O-06 (part, moved to M1; done 2026-11-25): onboard the domain to Cloudflare Email Sending for backup alerts (D-58; Email Routing stays off). Steps: `docs/runbooks/backup-setup.md` part A4.
 - [ ] Exit test on iPhone: photograph, publish, view publicly, make private.
 
 ### Not in M1
@@ -214,6 +215,7 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 - `npm audit` is used instead of OSV-Scanner (D-36).
 - Photo files are verified as each one arrives, before storage, rather than only at finalize (stricter; D-51). Removing a single photo is soft with a 30-day restore (D-51).
 - Search is rate-limited with one shared key per location instead of per visitor (D-53). Categories without public items are hidden (D-54).
+- Backup alerts use Cloudflare Email Sending instead of Email Routing (D-58). The first alert arrived about two hours after the run, so the weekly `backup:verify` stays the check of record.
 
 ### Known advisories (accepted, dev-only, below the high/critical CI gate)
 

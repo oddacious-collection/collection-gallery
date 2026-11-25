@@ -58,13 +58,41 @@ export async function authorize(
   };
 }
 
-async function call<T>(s: B2Session, op: string, payload: unknown, f: Fetch): Promise<T> {
+/**
+ * Backblaze expects clients to retry timeouts and "busy" answers: 408, 429
+ * and any 5xx (a 524 timeout stopped the first staging run, 2026-11-25), or
+ * a network failure. Uploads retry with a fresh upload URL each time.
+ */
+export function isRetryable(err: unknown): boolean {
+  if (err instanceof B2Error) return err.status === 408 || err.status === 429 || err.status >= 500;
+  return err instanceof TypeError; // fetch could not reach B2
+}
+
+/** Attempts per call and the first wait (doubled each time: 1 s, 2 s, 4 s). Tests set the wait to 0. */
+export const retryPolicy = { attempts: 4, baseDelayMs: 1000 };
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retryPolicy.attempts || !isRetryable(err)) throw err;
+      await new Promise((r) => setTimeout(r, retryPolicy.baseDelayMs * 2 ** (attempt - 1)));
+    }
+  }
+}
+
+async function callOnce<T>(s: B2Session, op: string, payload: unknown, f: Fetch): Promise<T> {
   const res = await f(`${s.apiUrl}/b2api/v4/${op}`, {
     method: 'POST',
     headers: { authorization: s.authorizationToken, 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
   return (await check(res)) as T;
+}
+
+function call<T>(s: B2Session, op: string, payload: unknown, f: Fetch): Promise<T> {
+  return withRetry(() => callOnce<T>(s, op, payload, f));
 }
 
 /** The bucket's ID, looked up by name (names are in config; IDs stay out of the repo). */
@@ -143,31 +171,34 @@ export async function uploadFile(
   opts: UploadOptions,
   f: Fetch = fetch,
 ): Promise<{ fileId: string }> {
-  const target = await call<{ uploadUrl: string; authorizationToken: string }>(
-    s,
-    'b2_get_upload_url',
-    { bucketId: bucket },
-    f,
-  );
-  const headers: Record<string, string> = {
-    authorization: target.authorizationToken,
-    'X-Bz-File-Name': encodeName(fileName),
-    'Content-Type': opts.contentType,
-    'Content-Length': String(bytes.length),
-    'X-Bz-Content-Sha1': await sha1Hex(bytes),
-    'X-Bz-Server-Side-Encryption': 'AES256',
-    'X-Bz-File-Retention-Mode': 'governance',
-    'X-Bz-File-Retention-Retain-Until-Timestamp': String(opts.retainUntil.getTime()),
-  };
-  for (const [k, v] of Object.entries(opts.info ?? {}))
-    headers[`X-Bz-Info-${k}`] = encodeURIComponent(v);
-  const res = await f(target.uploadUrl, {
-    method: 'POST',
-    headers,
-    body: bytes as Uint8Array<ArrayBuffer>,
+  const sha1 = await sha1Hex(bytes);
+  return withRetry(async () => {
+    const target = await callOnce<{ uploadUrl: string; authorizationToken: string }>(
+      s,
+      'b2_get_upload_url',
+      { bucketId: bucket },
+      f,
+    );
+    const headers: Record<string, string> = {
+      authorization: target.authorizationToken,
+      'X-Bz-File-Name': encodeName(fileName),
+      'Content-Type': opts.contentType,
+      'Content-Length': String(bytes.length),
+      'X-Bz-Content-Sha1': sha1,
+      'X-Bz-Server-Side-Encryption': 'AES256',
+      'X-Bz-File-Retention-Mode': 'governance',
+      'X-Bz-File-Retention-Retain-Until-Timestamp': String(opts.retainUntil.getTime()),
+    };
+    for (const [k, v] of Object.entries(opts.info ?? {}))
+      headers[`X-Bz-Info-${k}`] = encodeURIComponent(v);
+    const res = await f(target.uploadUrl, {
+      method: 'POST',
+      headers,
+      body: bytes as Uint8Array<ArrayBuffer>,
+    });
+    const body = (await check(res)) as { fileId: string };
+    return { fileId: body.fileId };
   });
-  const body = (await check(res)) as { fileId: string };
-  return { fileId: body.fileId };
 }
 
 /** Hides a file (it stays as a prior version until lifecycle rules remove it). */
