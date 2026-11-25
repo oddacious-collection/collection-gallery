@@ -54,7 +54,9 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - `npm run db:export` / `db:restore` (round trip tested: export, wipe, restore, identical);
    - runbooks: backup-setup, restore-db (with troubleshooting for alert emails), restore-media, emergency-purge, rotate-secrets (BAK-07);
    - B2 calls retry timeouts and busy answers (408, 429, 5xx: a 524 stopped the first run); one photo that still fails no longer stops the others, and the run then alerts. Uses B2 native API v4 (keys limited to two buckets need it).
-8. [ ] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review.
+8. [~] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review:
+   - `npm run restore:drill` + `restore-drill.yml` (on demand and quarterly): newest B2 export into a scratch staging D1 database, compared row for row; every backed-up private file downloaded and checked (SHA-1, photo size); scratch database deleted. Runbook `docs/runbooks/restore-drill.md`;
+   - the trial run found that D1's remote import doesn't keep deferred foreign keys across a file: the restore SQL now loads parents first and fills forward links (category parents, covers) in afterwards, and checks `PRAGMA foreign_key_check`.
 
 ### Owner feedback
 

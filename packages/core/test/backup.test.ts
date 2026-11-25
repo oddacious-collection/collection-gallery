@@ -294,7 +294,8 @@ describe('restore', () => {
   it('an export restores exactly into an emptied database, search index rebuilt', async () => {
     const { createCategory } = await import('../src/admin/categories.ts');
     const { setItemCategories, setItemStatus } = await import('../src/admin/items.ts');
-    const { restoreStatements, exportedMigrations } = await import('../src/backup/index.ts');
+    const { restoreStatements, exportedMigrations, tableKeys, FOREIGN_KEYS_SQL, PRIMARY_KEYS_SQL } =
+      await import('../src/backup/index.ts');
     // Some data with quotes, nesting, NULLs and a public item to index.
     const parent = await createCategory(
       env.DB,
@@ -319,6 +320,18 @@ describe('restore', () => {
       .run();
     await setItemCategories(env.DB, it.id, [child.id], ACTOR);
     await setItemStatus(env.DB, it.id, 'public', ACTOR);
+    // Links that point "forward": the shelf moves under a category created
+    // after it, and a category's cover points at media (which points at items).
+    const { moveCategory } = await import('../src/admin/categories.ts');
+    const newer = await createCategory(
+      env.DB,
+      { name: 'Newer room', slug: `room-${Date.now()}` },
+      ACTOR,
+    );
+    await moveCategory(env.DB, parent.id, newer.id, ACTOR);
+    await env.DB.prepare('UPDATE categories SET cover_media_id = ? WHERE id = ?')
+      .bind('01RESTRE0000000000000000M1', newer.id)
+      .run();
 
     const before = await exportDatabase(env.DB, new Date('2026-12-05T00:00:00Z'));
     expect(exportedMigrations(before).length).toBeGreaterThanOrEqual(4);
@@ -337,16 +350,29 @@ describe('restore', () => {
       (await env.DB.prepare('SELECT count(*) AS n FROM items').first<{ n: number }>())?.n,
     ).toBe(0);
 
-    await env.DB.batch(
-      restoreStatements(before).flatMap((s) =>
-        s.startsWith('DELETE FROM search_index;')
-          ? s
-              .split(';\n')
-              .filter((x) => x.trim())
-              .map((x) => env.DB.prepare(x))
-          : [env.DB.prepare(s)],
-      ),
+    // One statement at a time, no deferred foreign keys: how D1's remote
+    // import runs a file (the first drill failed on exactly this).
+    const keys = tableKeys(
+      (
+        await env.DB.prepare(FOREIGN_KEYS_SQL).all<{
+          tbl: string;
+          col: string;
+          ref: string;
+          nn: number;
+        }>()
+      ).results,
+      (await env.DB.prepare(PRIMARY_KEYS_SQL).all<{ tbl: string; col: string }>()).results,
     );
+    expect(keys.foreignKeys.some((k) => k.table === 'categories' && k.column === 'parent_id')).toBe(
+      true,
+    );
+    for (const s of restoreStatements(before, keys)) {
+      for (const x of s.startsWith('DELETE FROM search_index;') ? s.split(';\n') : [s]) {
+        if (x.trim()) await env.DB.prepare(x).run();
+      }
+    }
+    const fkProblems = await env.DB.prepare('PRAGMA foreign_key_check').all();
+    expect(fkProblems.results).toHaveLength(0);
 
     const after = await exportDatabase(env.DB, new Date('2026-12-05T00:00:00Z'));
     expect(after.tables).toEqual(before.tables);

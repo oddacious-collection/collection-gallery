@@ -25,6 +25,9 @@ import {
   bucketId,
   parseExport,
   restoreStatements,
+  tableKeys,
+  FOREIGN_KEYS_SQL,
+  PRIMARY_KEYS_SQL,
 } from '../packages/core/src/backup/index.ts';
 import { d1File, d1Migrate, d1Query, type D1Target } from './lib/d1.ts';
 
@@ -102,10 +105,18 @@ if (JSON.stringify(applied) !== JSON.stringify(exported)) {
 const dir = mkdtempSync(path.join(tmpdir(), 'cg-restore-'));
 try {
   const file = path.join(dir, 'restore.sql');
-  writeFileSync(file, `${restoreStatements(data).join('\n')}\n`);
+  const keys = tableKeys(
+    d1Query<{ tbl: string; col: string; ref: string; nn: number }>(target, FOREIGN_KEYS_SQL),
+    d1Query<{ tbl: string; col: string }>(target, PRIMARY_KEYS_SQL),
+  );
+  writeFileSync(file, `${restoreStatements(data, keys).join('\n')}\n`);
   d1File(target, file);
 } finally {
   rmSync(dir, { recursive: true, force: true });
+}
+if (d1Query(target, 'PRAGMA foreign_key_check').length > 0) {
+  console.error('Restore FAILED: some links between tables are broken (PRAGMA foreign_key_check).');
+  process.exit(1);
 }
 
 // Compare row counts table by table.

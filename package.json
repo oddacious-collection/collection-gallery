@@ -29,6 +29,7 @@
     "deploy:staging": "npm run deploy:staging -w @cg/public && npm run deploy:staging -w @cg/admin && npm run deploy:staging -w @cg/backup",
     "smoke:staging": "node scripts/smoke-staging.ts",
     "backup:verify": "node scripts/backup-verify.ts",
+    "restore:drill": "node scripts/restore-drill.ts",
     "db:export": "node scripts/export-db.ts",
     "db:restore": "node scripts/restore-db.ts"
   },

@@ -43,11 +43,10 @@ only) as `B2_VERIFY_KEY_ID` / `B2_VERIFY_APP_KEY`.
    out the commit whose migrations match, restore, then migrate forward.
 
 2. **Restoring a deployed database** (disaster recovery) is a reviewed,
-   manual step: create a new D1 database, apply the migrations, load the same
-   SQL the script generates, point the Workers' `database_id` at it, deploy,
-   then run the privacy-leak suite. The M1 restore drill (BAK-08) walks
-   through this on staging; follow `docs/runbooks/restore-drill.md` once it
-   exists.
+   manual step: build a new, checked database with the restore drill script
+   (`--keep`), point the Workers' `database_id` at it, deploy, then run the
+   checks below. Steps: `docs/runbooks/restore-drill.md`, "Using the same
+   steps for a real restore".
 
 ## Checks after any restore
 

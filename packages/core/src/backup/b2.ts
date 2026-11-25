@@ -116,6 +116,8 @@ export interface B2File {
   fileName: string;
   fileId: string;
   contentLength: number;
+  /** Hex SHA-1 that B2 checked on upload (the backup Worker computed it from the R2 bytes). */
+  contentSha1?: string;
   uploadTimestamp: number;
   action: string;
 }
