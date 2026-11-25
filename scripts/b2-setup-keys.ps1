@@ -55,7 +55,7 @@ Write-Host 'Backblaze: Application Keys -> Generate New Master Application Key, 
 $masterId = (Read-Host -Prompt 'Master keyID').Trim()
 $masterKey = (Read-Secret 'Master applicationKey (hidden)').Trim()
 
-$auth = Invoke-RestMethod -Uri 'https://api.backblazeb2.com/b2api/v3/b2_authorize_account' `
+$auth = Invoke-RestMethod -Uri 'https://api.backblazeb2.com/b2api/v4/b2_authorize_account' `
   -Headers @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${masterId}:${masterKey}")) }
 $api = $auth.apiInfo.storageApi.apiUrl
 $token = $auth.authorizationToken
@@ -65,7 +65,7 @@ $masterKey = $null
 # Check both buckets exist with Object Lock and default encryption on.
 $bucketIds = @()
 foreach ($name in $Buckets) {
-  $res = Invoke-B2 "$api/b2api/v3/b2_list_buckets" $token @{ accountId = $accountId; bucketName = $name }
+  $res = Invoke-B2 "$api/b2api/v4/b2_list_buckets" $token @{ accountId = $accountId; bucketName = $name }
   $b = $res.buckets | Where-Object { $_.bucketName -eq $name }
   if (-not $b) { throw "Bucket $name not found. Create it first (part A2), or tell Claude the name you used." }
   if (-not $b.fileLockConfiguration.value.isFileLockEnabled) { throw "Object Lock is not enabled on $name (part A2)." }
@@ -87,14 +87,14 @@ $lifecycle = @{
   )
 }
 for ($i = 0; $i -lt $Buckets.Count; $i++) {
-  Invoke-B2 "$api/b2api/v3/b2_update_bucket" $token @{
+  Invoke-B2 "$api/b2api/v4/b2_update_bucket" $token @{
     accountId = $accountId; bucketId = $bucketIds[$i]; lifecycleRules = $lifecycle[$Buckets[$i]]
   } | Out-Null
   Write-Host "ok  lifecycle rules set on $($Buckets[$i])"
 }
 
 function New-Key([string]$KeyName, [string[]]$Capabilities) {
-  Invoke-B2 "$api/b2api/v3/b2_create_key" $token @{
+  Invoke-B2 "$api/b2api/v4/b2_create_key" $token @{
     accountId = $accountId; keyName = $KeyName; capabilities = $Capabilities; bucketIds = $bucketIds
   }
 }

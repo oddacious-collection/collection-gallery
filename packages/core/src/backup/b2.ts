@@ -1,5 +1,5 @@
 /**
- * A minimal Backblaze B2 native-API client (v3) for backups (BAK-02 to 05).
+ * A minimal Backblaze B2 native-API client (v4: needed for keys limited to two buckets) for backups (BAK-02 to 05).
  * Only what the backup Worker and `backup:verify` need. No dependency:
  * plain fetch, so tests can stand in a fake B2.
  *
@@ -29,7 +29,7 @@ export class B2Error extends Error {
   }
 }
 
-const AUTH_URL = 'https://api.backblazeb2.com/b2api/v3/b2_authorize_account';
+const AUTH_URL = 'https://api.backblazeb2.com/b2api/v4/b2_authorize_account';
 
 async function check(res: Response): Promise<unknown> {
   const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
@@ -59,7 +59,7 @@ export async function authorize(
 }
 
 async function call<T>(s: B2Session, op: string, payload: unknown, f: Fetch): Promise<T> {
-  const res = await f(`${s.apiUrl}/b2api/v3/${op}`, {
+  const res = await f(`${s.apiUrl}/b2api/v4/${op}`, {
     method: 'POST',
     headers: { authorization: s.authorizationToken, 'content-type': 'application/json' },
     body: JSON.stringify(payload),
