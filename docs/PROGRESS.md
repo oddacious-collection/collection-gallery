@@ -1,8 +1,8 @@
 # Progress
 
-## Status: M1 Core gallery — kickoff approved 2026-11-23 (M0 complete 2026-11-22)
+## Status: M1 Core gallery — exit criteria met 2026-11-25, awaiting owner review (M0 complete 2026-11-22)
 
-## M1 Core gallery (in progress)
+## M1 Core gallery (exit criteria met 2026-11-25; awaiting owner review)
 
 Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner is named only by a pen name, currently Insignificant Nobody), the D-21/D-22/D-26 amendments, and this plan.
 
@@ -54,9 +54,39 @@ Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner i
    - `npm run db:export` / `db:restore` (round trip tested: export, wipe, restore, identical);
    - runbooks: backup-setup, restore-db (with troubleshooting for alert emails), restore-media, emergency-purge, rotate-secrets (BAK-07);
    - B2 calls retry timeouts and busy answers (408, 429, 5xx: a 524 stopped the first run); one photo that still fails no longer stops the others, and the run then alerts. Uses B2 native API v4 (keys limited to two buckets need it).
-8. [~] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review:
+8. [x] Restore drill (BAK-08), the owner's iPhone exit test, and the M1 review (2026-11-25):
    - `npm run restore:drill` + `restore-drill.yml` (on demand and quarterly): newest B2 export into a scratch staging D1 database, compared row for row; every backed-up private file downloaded and checked (SHA-1, photo size); scratch database deleted. Runbook `docs/runbooks/restore-drill.md`;
    - the trial run found that D1's remote import doesn't keep deferred foreign keys across a file: the restore SQL now loads parents first and fills forward links (category parents, covers) in afterwards, and checks `PRAGMA foreign_key_check`.
+   - full drill passed on GitHub 2026-11-25 (23/23 tables identical, 9/9 private files intact);
+   - leak suite on staging now ends with both toggle items private, so between runs the only public test item is "Leak test public item" (owner request).
+
+### M1 review summary (2026-11-25)
+
+**Built** (steps 1 to 8 above, PRs #14 to #29): the full data model; admin items with trash, revisions and the category tree; the on-device photo pipeline (all metadata stripped, verified on arrival) and the photo inbox; the public site (home, collections, categories, item pages with carousel, vertical feed, search, Open Graph, 404s); the privacy-leak suite as a deploy gate and a post-deploy staging check; off-site backups to Backblaze with Object Lock, failure emails, a weekly check and a quarterly restore drill. Unit tests 80 → 198; e2e on Chromium and WebKit with axe.
+
+**Exit criteria:** all met.
+
+| Criterion                                                        | Evidence                                                                                      |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Owner photographs an item on iPhone, publishes, sees it publicly | Owner exit test 2026-11-25                                                                    |
+| Toggling private removes it everywhere ≤ 60 s                    | Owner exit test; leak suite phase B (no edge caching in M1, D-45, so removal is immediate)    |
+| TST-02 passes                                                    | Leak suite green locally (deploy gate) and on staging after every deploy                      |
+| Restore drill succeeds                                           | GitHub run 45711747467: 23/23 tables identical, 9/9 private files intact (`restore-drill.md`) |
+
+**Deviations:** D-42 to D-58 in §13. The notable ones: buttons instead of drag-and-drop for categories (D-50); verify each photo on arrival (D-51); one shared search rate-limit key (D-53); the photo inbox (D-55, owner request); prices in US dollars only (D-57); backup alerts by Cloudflare Email Sending, B2 API v4 (D-58).
+
+**Found and fixed along the way:** the first backup run stopped on a Backblaze timeout (retries added); restoring onto a real D1 database would have failed on foreign keys (restore SQL reordered). Both were caught by the checks built in this milestone.
+
+**Owner follow-ups:**
+
+- review this summary;
+- Dependabot PR #30 (astro-cloudflare group) to triage;
+- desktop HEIC conversion (deferred, after using the inbox for a while);
+- the quarterly restore drill runs by itself (2 Jan/Apr/Jul/Oct); GitHub emails if it fails.
+
+**Carried into later milestones:** search rate-limit pricing to recheck before launch (D-53); public photo regeneration after a media restore (M5, `restore-media.md`); tag rename/merge, filters and sorts (M3).
+
+**Next:** M2 Import / export (IMP-01 to 07): the Instagram export imported as drafts, CSV round trip, full archive download.
 
 ### Owner feedback
 
@@ -74,7 +104,7 @@ Claude gives click-by-click steps when each is needed.
   - two staging buckets with Object Lock and encryption;
   - job key (write-and-lock, no delete), read-only verify key, break-glass key kept offline.
 - [x] O-06 (part, moved to M1; done 2026-11-25): onboard the domain to Cloudflare Email Sending for backup alerts (D-58; Email Routing stays off). Steps: `docs/runbooks/backup-setup.md` part A4.
-- [ ] Exit test on iPhone: photograph, publish, view publicly, make private.
+- [x] Exit test on iPhone (2026-11-25): photographed, published, seen publicly, made private and gone from the public site.
 
 ### Not in M1
 
@@ -190,6 +220,7 @@ Two independent reviews (application code; CI, supply chain and GitHub settings)
 - Quarterly: update the pinned ZAP image digest in `ci.yml` (Dependabot can't), and check the gitleaks version gitleaks-action downloads.
 - Before 2027-11-22: renew `ci-staging-deploy` and the `ci-staging` service token (`docs/security/tokens.md`).
 - During long breaks: `npx.cmd wrangler logout` on the owner's machine.
+- Quarterly (automatic): restore drill, 2 Jan/Apr/Jul/Oct (`restore-drill.yml`); weekly (automatic): `backup:verify`. GitHub emails on failure; record each drill in `docs/runbooks/restore-drill.md`.
 
 ### Incidents
 
