@@ -4,7 +4,7 @@
  * owner's Cloudflare account): the workers.dev hostnames and the Access team.
  *
  * Usage (after `CLOUDFLARE_ENV=staging npm run build`):
- *   node scripts/deploy-staging.ts <public|admin> [--dry-run]
+ *   node scripts/deploy-staging.ts <public|admin|backup> [--dry-run]
  *
  * Required env (GitHub `staging` environment secrets in CI, so they're masked
  * in the public logs):
@@ -20,10 +20,13 @@ import path from 'node:path';
 import { staticHeadersFile } from '../packages/core/src/headers.ts';
 
 const app = process.argv[2];
-if (app !== 'public' && app !== 'admin') {
-  console.error('usage: deploy-staging.ts <public|admin> [--dry-run]');
+if (app !== 'public' && app !== 'admin' && app !== 'backup') {
+  console.error('usage: deploy-staging.ts <public|admin|backup> [--dry-run]');
   process.exit(2);
 }
+// The backup Worker isn't an Astro build: it deploys from its own config's
+// staging environment, and has no host-specific values to inject.
+const isAstro = app !== 'backup';
 const dryRun = process.argv.includes('--dry-run');
 
 function env(name: string): string {
@@ -46,17 +49,29 @@ const expectedName = `cg-${app}-staging`;
 // Guard: only deploy a build made for staging, to the Worker that Access
 // protects. (2026-11-22: a stray CLOUDFLARE_ENV made wrangler append a second
 // "-staging" and create new, unprotected Workers. Never again.)
-const built = JSON.parse(readFileSync(path.join(cwd, 'dist/server/wrangler.json'), 'utf8')) as {
-  name?: unknown;
-  workers_dev?: unknown;
-  preview_urls?: unknown;
-};
-if (built.name !== expectedName) {
-  fail(
-    `built config is for "${String(built.name)}", expected "${expectedName}" (build with CLOUDFLARE_ENV=staging)`,
-  );
+if (isAstro) {
+  const built = JSON.parse(readFileSync(path.join(cwd, 'dist/server/wrangler.json'), 'utf8')) as {
+    name?: unknown;
+    workers_dev?: unknown;
+    preview_urls?: unknown;
+  };
+  if (built.name !== expectedName) {
+    fail(
+      `built config is for "${String(built.name)}", expected "${expectedName}" (build with CLOUDFLARE_ENV=staging)`,
+    );
+  }
+  if (built.preview_urls !== false) fail('preview_urls must be false');
+} else {
+  // Routeless by design (D-47): the config must name the staging Worker and
+  // keep workers.dev and preview URLs off.
+  const config = readFileSync(path.join(cwd, 'wrangler.jsonc'), 'utf8');
+  const staging = config.slice(config.indexOf('"staging"'));
+  if (!staging.includes(`"name": "${expectedName}"`))
+    fail(`staging config must name ${expectedName}`);
+  if (!/"workers_dev": false/.test(staging) || !/"preview_urls": false/.test(staging)) {
+    fail('the backup Worker must have workers_dev and preview_urls off');
+  }
 }
-if (built.preview_urls !== false) fail('preview_urls must be false');
 
 // The public Worker serves static files without running, using the generated
 // `_headers`: it must be the staging policy, not a local one (no
@@ -82,12 +97,14 @@ if (bundle.status !== 0) fail('bundle check failed');
 const vars: Record<string, string> =
   app === 'public'
     ? { PUBLIC_ORIGIN: env('STAGING_PUBLIC_URL') }
-    : {
-        PUBLIC_ORIGIN: env('STAGING_PUBLIC_URL'),
-        ADMIN_ORIGIN: env('STAGING_ADMIN_URL'),
-        ACCESS_TEAM_DOMAIN: env('ACCESS_TEAM_DOMAIN'),
-        ACCESS_AUD: env('ACCESS_AUD_ADMIN'),
-      };
+    : app === 'admin'
+      ? {
+          PUBLIC_ORIGIN: env('STAGING_PUBLIC_URL'),
+          ADMIN_ORIGIN: env('STAGING_ADMIN_URL'),
+          ACCESS_TEAM_DOMAIN: env('ACCESS_TEAM_DOMAIN'),
+          ACCESS_AUD: env('ACCESS_AUD_ADMIN'),
+        }
+      : {};
 
 // The built config is already the flattened staging config. CLOUDFLARE_ENV
 // must not reach wrangler here, or it applies the environment a second time.
@@ -102,7 +119,7 @@ const args = [
   'wrangler',
   'deploy',
   '--config',
-  'dist/server/wrangler.json',
+  ...(isAstro ? ['dist/server/wrangler.json'] : ['wrangler.jsonc', '--env', 'staging']),
   '--name',
   expectedName,
   '--message',

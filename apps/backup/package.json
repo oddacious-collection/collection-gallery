@@ -1,0 +1,16 @@
+{
+  "name": "@cg/backup",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit",
+    "deploy:staging": "node ../../scripts/deploy-staging.ts backup"
+  },
+  "dependencies": {
+    "@cg/core": "*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "wrangler": "4.162.0"
+  }
+}

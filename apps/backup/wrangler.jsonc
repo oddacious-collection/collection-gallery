@@ -1,0 +1,66 @@
+// Backup Worker (D-47, §9). Routeless: no fetch handler, no workers.dev URL,
+// no preview URLs. Runs hourly on a Cron Trigger: exports the database to
+// Backblaze B2 once a day (and once a month) and syncs `media-private`.
+//
+// Least privilege: it holds the ONLY backup credentials (secrets B2_KEY_ID,
+// B2_APP_KEY; a key that can't delete) and reads the database and the
+// private bucket. Neither the public nor the admin Worker can reach B2.
+// Secret ALERT_TO (the owner's address) is never committed.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // LOCAL DEVELOPMENT only at the top level (see apps/admin/wrangler.jsonc).
+  "name": "cg-backup-local",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-28",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  // Hourly: a failed run is retried an hour later; exports happen once a day.
+  "triggers": { "crons": ["15 * * * *"] },
+  // Up to 5 minutes of CPU for a big first media sync (Workers Paid).
+  "limits": { "cpu_ms": 300000 },
+  "vars": {
+    "ENVIRONMENT": "local",
+    "B2_DB_BUCKET": "oddacioustreasures-com-local-db-backups",
+    "B2_MEDIA_BUCKET": "oddacioustreasures-com-local-media-backups",
+    "ALERT_FROM": "backups@oddacioustreasures.com",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cg-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/core/migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "MEDIA_PRIVATE", "bucket_name": "cg-media-private-local" }],
+  // Failure alerts (BAK-06) through Cloudflare Email Sending (D-58).
+  "send_email": [{ "name": "EMAIL" }],
+
+  "env": {
+    "staging": {
+      "name": "cg-backup-staging",
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+      "triggers": { "crons": ["15 * * * *"] },
+      "limits": { "cpu_ms": 300000 },
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "B2_DB_BUCKET": "oddacioustreasures-com-staging-db-backups",
+        "B2_MEDIA_BUCKET": "oddacioustreasures-com-staging-media-backups",
+        "ALERT_FROM": "backups@oddacioustreasures.com",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cg-staging",
+          "database_id": "f335c98e-69dd-4582-9559-dcb53587dfa4",
+          "migrations_dir": "../../packages/core/migrations",
+        },
+      ],
+      "r2_buckets": [{ "binding": "MEDIA_PRIVATE", "bucket_name": "cg-media-private-staging" }],
+      "send_email": [{ "name": "EMAIL" }],
+    },
+  },
+}

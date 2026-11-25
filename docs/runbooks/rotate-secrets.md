@@ -1,0 +1,16 @@
+# Rotate secrets and keys (BAK-07)
+
+Rotate on expiry, or at once if a secret may have leaked. The register of
+every token, its scope and expiry is `docs/security/tokens.md`.
+
+| What                                  | Where it lives                                                                                                                 | How to rotate                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backblaze **job** and **verify** keys | Worker `cg-backup-staging` secrets `B2_KEY_ID`, `B2_APP_KEY`; GitHub `staging` secrets `B2_VERIFY_KEY_ID`, `B2_VERIFY_APP_KEY` | Backblaze → Application Keys: delete `cg-backup-staging-job` and `-verify`; then run `scripts/b2-setup-keys.ps1` again (it makes new ones and stores them). Cancel the master key afterwards. |
+| Backblaze **break-glass** key         | Offline only                                                                                                                   | Delete `cg-backup-staging-breakglass` in Backblaze; run the setup script (it shows a new one once).                                                                                           |
+| Backup alert address                  | Worker secret `ALERT_TO`                                                                                                       | `npx.cmd wrangler secret put ALERT_TO --config apps\backup\wrangler.jsonc --env staging`                                                                                                      |
+| Admin email (Access check)            | Worker secret `ADMIN_EMAIL` on `cg-admin-staging`                                                                              | `npx.cmd wrangler secret put ADMIN_EMAIL --env staging` in `apps\admin`                                                                                                                       |
+| Cloudflare CI token                   | GitHub `staging` secret `CLOUDFLARE_API_TOKEN`                                                                                 | Cloudflare → My Profile/Account API Tokens: roll the token; `gh secret set CLOUDFLARE_API_TOKEN --env staging`                                                                                |
+| Access service token (CI)             | GitHub `staging` secrets `CF_ACCESS_CLIENT_ID`/`_SECRET`                                                                       | Zero Trust → Service credentials → `ci-staging` → Rotate secret; `gh secret set` both                                                                                                         |
+
+After any rotation, re-run the affected check: a push to `main` (deploy,
+smoke test, leak suite), or **Actions → Backup verify → Run workflow**.
