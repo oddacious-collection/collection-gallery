@@ -1,0 +1,47 @@
+# Weekly backup check (BAK-08, D-47): a second alarm, independent of the
+# backup Worker's own failure email. GitHub emails the repository owner when a
+# scheduled run fails.
+#
+# Enabled once the owner has finished docs/runbooks/backup-setup.md (part B),
+# by setting the repository variable BACKUPS_ENABLED to "true".
+# Note: GitHub pauses scheduled workflows after 60 days without repository
+# activity; the backup Worker's cron does not depend on this (D-47).
+name: Backup verify
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  WRANGLER_SEND_METRICS: 'false'
+  FORCE_COLOR: '0'
+
+jobs:
+  verify:
+    name: backup:verify (staging)
+    if: ${{ vars.BACKUPS_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: staging
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Verify the latest backups
+        run: npm run backup:verify
+        env:
+          B2_VERIFY_KEY_ID: ${{ secrets.B2_VERIFY_KEY_ID }}
+          B2_VERIFY_APP_KEY: ${{ secrets.B2_VERIFY_APP_KEY }}
+          # Read-only use of D1: list the private originals the backup must hold.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

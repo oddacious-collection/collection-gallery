@@ -16,7 +16,7 @@
     "build": "npm run build -w @cg/public && npm run build -w @cg/admin",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "tsc -p packages/core --noEmit && npm run typecheck -w @cg/public && npm run typecheck -w @cg/admin && tsc -p tsconfig.tools.json --noEmit",
+    "typecheck": "tsc -p packages/core --noEmit && npm run typecheck -w @cg/public && npm run typecheck -w @cg/admin && npm run typecheck -w @cg/backup && tsc -p tsconfig.tools.json --noEmit",
     "test": "npm run test -w @cg/core",
     "test:e2e": "playwright test",
     "check:bundle": "node scripts/check-public-bundle.ts",
@@ -26,9 +26,11 @@
     "leak:local": "node scripts/leak-local.ts",
     "leak:staging": "node scripts/leak-staging.ts",
     "db:migrate:staging": "npm run db:migrate:staging -w @cg/admin",
-    "deploy:staging": "npm run deploy:staging -w @cg/public && npm run deploy:staging -w @cg/admin",
+    "deploy:staging": "npm run deploy:staging -w @cg/public && npm run deploy:staging -w @cg/admin && npm run deploy:staging -w @cg/backup",
     "smoke:staging": "node scripts/smoke-staging.ts",
-    "backup:verify": "node -e \"console.error('backup:verify is implemented in M1 (BAK-08)'); process.exit(1)\""
+    "backup:verify": "node scripts/backup-verify.ts",
+    "db:export": "node scripts/export-db.ts",
+    "db:restore": "node scripts/restore-db.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
