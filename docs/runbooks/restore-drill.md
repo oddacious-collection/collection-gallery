@@ -62,6 +62,7 @@ restore-db.md ("Checks after any restore"). Photos: restore-media.md.
 
 ## Record
 
-| Date       | Result                          | Notes                                                                                                                                                                   |
-| ---------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-25 | Pass (database half, trial run) | Found and fixed: D1's remote import doesn't keep deferred foreign keys across a file, so the restore SQL now loads parents first and fills forward links in afterwards. |
+| Date       | Result                                                | Notes                                                                                                                                                                                             |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-25 | Pass (database half, trial run)                       | Found and fixed: D1's remote import doesn't keep deferred foreign keys across a file, so the restore SQL now loads parents first and fills forward links in afterwards.                           |
+| 2026-11-25 | **Pass** (full drill, GitHub Actions run 45711747467) | Newest export (24 tables, 266 rows) restored into a scratch D1 database; 23/23 tables identical, links intact, search index rebuilt; all 9 private files (35.7 MB) intact. M1 exit criterion met. |

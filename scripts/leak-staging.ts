@@ -5,7 +5,8 @@
  *      idempotent; it stays there between runs);
  *   2. self-check, then crawl the public staging site (phase A);
  *   3. flip the two toggle items (toggle-b.sql) and crawl again (phase B);
- *   4. always flip them back.
+ *   4. always end with both toggle items private (toggle-rest.sql), so between
+ *      runs the only public test item is "Leak test public item".
  *
  * Besides the sentinels it checks staging's real private storage keys and
  * internal IDs (read from D1); reports print labels only, never values.
@@ -43,7 +44,7 @@ try {
   applySql(staging, 'toggle-b.sql');
   failures += (await runPhase('b', base, privateFacts(staging), headers)).failures.length;
 } finally {
-  applySql(staging, 'toggle-a.sql');
+  applySql(staging, 'toggle-rest.sql'); // both private between runs
 }
 if (failures > 0) {
   console.error(`\nPrivacy-leak suite on staging FAILED: ${failures} problem(s).`);
