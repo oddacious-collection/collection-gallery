@@ -12,7 +12,7 @@
  * for 365 days (bucket lifecycle rule). Storage keys are never reused
  * (MED-13), so a key already in B2 never needs re-uploading.
  *
- * Bucket lifecycle rules (set by the owner, docs/runbooks/backup-setup.md)
+ * Bucket lifecycle rules (set by scripts/b2-setup-keys.ps1, docs/runbooks/backup-setup.md)
  * remove expired daily/monthly copies and old versions; this job can't
  * delete anything itself.
  */
@@ -60,7 +60,15 @@ export interface BackupReport {
     tables: number;
     rows: number;
   } | null;
-  media: { total: number; uploaded: number; hidden: number; pending: number };
+  media: {
+    total: number;
+    uploaded: number;
+    /** Uploads that still failed after retries (tried again next run). */
+    failed: number;
+    firstError: string | null;
+    hidden: number;
+    pending: number;
+  };
 }
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -100,28 +108,40 @@ export async function syncMedia(
     );
   }
 
+  // One file that still fails after retries must not stop the others: count
+  // it, carry on, and let the run fail at the end (alert); the next hourly run
+  // tries it again.
   let uploaded = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const key of missing.slice(0, maxUploads)) {
-    const obj = await source.get(key);
-    if (!obj) continue; // deleted since listing
-    const bytes = new Uint8Array(await obj.arrayBuffer());
-    await uploadFile(
-      s,
-      bucket,
-      `${MEDIA_PREFIX}${key}`,
-      bytes,
-      {
-        contentType: obj.httpMetadata?.contentType ?? 'application/octet-stream',
-        retainUntil: new Date(now.getTime() + MEDIA_RETAIN_DAYS * DAY_MS),
-      },
-      f,
-    );
-    uploaded++;
+    try {
+      const obj = await source.get(key);
+      if (!obj) continue; // deleted since listing
+      const bytes = new Uint8Array(await obj.arrayBuffer());
+      await uploadFile(
+        s,
+        bucket,
+        `${MEDIA_PREFIX}${key}`,
+        bytes,
+        {
+          contentType: obj.httpMetadata?.contentType ?? 'application/octet-stream',
+          retainUntil: new Date(now.getTime() + MEDIA_RETAIN_DAYS * DAY_MS),
+        },
+        f,
+      );
+      uploaded++;
+    } catch (err) {
+      failed++;
+      firstError ??= err instanceof Error ? err.message.slice(0, 200) : 'unknown';
+    }
   }
   for (const key of gone) await hideFile(s, bucket, `${MEDIA_PREFIX}${key}`, f);
   return {
     total: inR2.size,
     uploaded,
+    failed,
+    firstError,
     hidden: gone.length,
     pending: Math.max(0, missing.length - uploaded),
   };
@@ -207,9 +227,17 @@ export async function runBackup(
     dbTables: db?.tables ?? 0,
     mediaTotal: media.total,
     uploaded: media.uploaded,
+    failed: media.failed,
     hidden: media.hidden,
     pending: media.pending,
   });
+  if (media.failed > 0) {
+    throw new Error(
+      `${media.failed} photo upload(s) failed after retries (first: ${media.firstError}). ` +
+        `${media.uploaded} copied this run${db?.daily ? ', database copied' : ''}; ` +
+        'the next hourly run tries the rest again.',
+    );
+  }
   return { kind, db, media };
 }
 

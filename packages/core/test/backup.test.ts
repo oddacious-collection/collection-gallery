@@ -3,10 +3,13 @@
  * every request, with real D1 and R2 inside workerd.
  */
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createItem } from '../src/admin/items.ts';
 import {
+  B2Error,
   DAY_MS,
+  isRetryable,
+  retryPolicy,
   alertText,
   exportDatabase,
   exportableTables,
@@ -30,6 +33,8 @@ class FakeB2 {
   files: StoredFile[] = [];
   calls: string[] = [];
   buckets = { 'db-bucket': 'bid-db', 'media-bucket': 'bid-media' } as Record<string, string>;
+  /** Return true to answer this upload with a 524 timeout. */
+  failUpload: (name: string) => boolean = () => false;
 
   fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input));
@@ -78,6 +83,11 @@ class FakeB2 {
     }
     if (url.host === 'up.fake') {
       const headers = Object.fromEntries(new Headers(init?.headers).entries());
+      const name = decodeURIComponent(headers['x-bz-file-name'] ?? '');
+      if (this.failUpload(name)) {
+        // What B2 sent on 2026-11-25: a 524 timeout with a non-JSON body.
+        return new Response('<html>timeout</html>', { status: 524 });
+      }
       const bytes = new Uint8Array(init?.body as Uint8Array);
       this.files.push({
         name: decodeURIComponent(headers['x-bz-file-name'] ?? ''),
@@ -100,6 +110,15 @@ class FakeB2 {
     return this.files.filter((x) => x.name.startsWith(prefix));
   }
 }
+
+// No real waiting between retries in tests.
+const realDelay = retryPolicy.baseDelayMs;
+beforeAll(() => {
+  retryPolicy.baseDelayMs = 0;
+});
+afterAll(() => {
+  retryPolicy.baseDelayMs = realDelay;
+});
 
 const config: BackupConfig = {
   ENVIRONMENT: 'local',
@@ -213,6 +232,46 @@ describe('a backup run', () => {
       /refusing to hide/,
     );
     expect(fake.files.every((x) => !x.hidden)).toBe(true);
+  });
+
+  it('retries a B2 timeout (524) with a fresh upload URL, then succeeds', async () => {
+    const fake = new FakeB2();
+    let failures = 2;
+    fake.failUpload = (name) => name.includes('retryme') && failures-- > 0;
+    await env.MEDIA_PRIVATE.put('retryme000000000000000001', new Uint8Array([7]));
+    const report = await runBackup(config, env, 'media', new Date(), fake.fetch);
+    expect(report.media.failed).toBe(0);
+    expect(fake.named('media-private/retryme000000000000000001')).toHaveLength(1);
+    // Three attempts for this file, each with its own upload URL.
+    const uploadUrlCalls = fake.calls.filter((c) => c === 'b2_get_upload_url').length;
+    expect(uploadUrlCalls).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a file that keeps failing does not stop the others; the run fails and alerts', async () => {
+    const fake = new FakeB2();
+    fake.failUpload = (name) => name.includes('alwaysbad');
+    await env.MEDIA_PRIVATE.put('alwaysbad0000000000000001', new Uint8Array([1]));
+    await env.MEDIA_PRIVATE.put('fineafter0000000000000001', new Uint8Array([2]));
+    await expect(runBackup(config, env, 'media', new Date(), fake.fetch)).rejects.toThrow(
+      /1 photo upload\(s\) failed after retries \(first: B2 524 unknown/,
+    );
+    expect(fake.named('media-private/fineafter0000000000000001')).toHaveLength(1);
+    expect(fake.named('media-private/alwaysbad0000000000000001')).toHaveLength(0);
+
+    // B2 recovers: the next run copies the file it missed.
+    fake.failUpload = () => false;
+    const next = await runBackup(config, env, 'media', new Date(), fake.fetch);
+    expect(next.media.failed).toBe(0);
+    expect(fake.named('media-private/alwaysbad0000000000000001')).toHaveLength(1);
+  });
+
+  it('does not retry errors that will not go away (bad key, bad request)', () => {
+    expect(isRetryable(new B2Error(401, 'unauthorized', ''))).toBe(false);
+    expect(isRetryable(new B2Error(400, 'bad_request', ''))).toBe(false);
+    expect(isRetryable(new B2Error(503, 'service_unavailable', ''))).toBe(true);
+    expect(isRetryable(new B2Error(524, 'unknown', ''))).toBe(true);
+    expect(isRetryable(new B2Error(429, 'too_many_requests', ''))).toBe(true);
+    expect(isRetryable(new TypeError('fetch failed'))).toBe(true);
   });
 
   it('fails clearly when a bucket is missing, and writes a plain alert', async () => {

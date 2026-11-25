@@ -54,3 +54,23 @@ only) as `B2_VERIFY_KEY_ID` / `B2_VERIFY_APP_KEY`.
 - `npm run leak:staging` passes (nothing private on public pages).
 - The admin item list and a few item pages look right; photos load.
 - `npm run backup:verify` passes the next day.
+
+## Troubleshooting: a backup-failure email arrived
+
+The backup Worker emails the alert address when an hourly run fails
+(sender `backups@oddacioustreasures.com`, subject "backup FAILED"). The time
+in the email is when the run started. The email itself can arrive late: the
+first one (2026-11-25) took about two hours. So first check whether the
+problem is still there: in GitHub, **Actions → Backup verify → Run
+workflow**. If that passes, a later run has already caught up.
+
+| Error in the email                                         | What it means                                                                                                          | What to do                                                                                                                                                  |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `photo upload(s) failed after retries` or `B2 5xx` / `524` | Backblaze was slow or busy. Each call is retried 4 times; other photos still copied.                                   | Nothing, unless it repeats for a day: the next hourly run tries again. If it repeats, check <https://status.backblaze.com>.                                 |
+| `B2 401` (`unauthorized`, `bad_auth_token`)                | The job key was deleted or replaced.                                                                                   | Make new keys: `docs/runbooks/rotate-secrets.md`.                                                                                                           |
+| `no access to bucket …`                                    | A bucket was renamed or deleted, or the key doesn't cover it.                                                          | Check the bucket names in `apps/backup/wrangler.jsonc` against Backblaze.                                                                                   |
+| `refusing to hide …`                                       | The private photo store suddenly listed far fewer files than the backup holds. The job stopped instead of hiding them. | Don't work around it. Check the photo store (R2 `cg-media-private-staging`) and the Worker's bucket binding; restore photos if needed (`restore-media.md`). |
+| a configuration error (`B2_KEY_ID`, `ALERT_TO`, …)         | A Worker secret is missing.                                                                                            | Re-run `scripts/b2-setup-keys.ps1` (part B of `backup-setup.md`).                                                                                           |
+
+The backup job can never delete or overwrite a locked copy, so a failed run
+never damages existing backups.
