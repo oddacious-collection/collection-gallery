@@ -45,9 +45,11 @@ monthly copies and photos).
 If the name is taken (bucket names are global), add `-2` to the end and tell
 Claude the names you used.
 
-### A3. Lifecycle rules
+### A3. Lifecycle rules (optional: the Part B script sets these)
 
-Open each bucket's **Lifecycle Settings**.
+The key script in Part B sets these rules itself, so this step can be
+skipped. To set them by hand instead, open each bucket's **Lifecycle
+Settings**.
 
 **`…-staging-db-backups`** → choose **Use custom lifecycle rules** and add two
 rules:
@@ -87,7 +89,8 @@ key**: in Backblaze, **Application Keys → Generate New Master Application
 Key**. Keep the window open; the script asks for its **keyID** and the
 **applicationKey** (typed into hidden prompts, never shown or saved).
 
-The script:
+The script first checks both buckets and sets their lifecycle rules (A3).
+Then it:
 
 1. creates the **backup job key** (both buckets; list, read, write and set
    locks; **no delete**, **no bypass of locks**) and stores it straight into

@@ -75,6 +75,24 @@ foreach ($name in $Buckets) {
   Write-Host "ok  bucket $name (private, encrypted, Object Lock on)"
 }
 
+# Lifecycle rules (part A3), set here so the numbers are exact. These only
+# tidy up old copies; Object Lock still protects every file until its date.
+$lifecycle = @{
+  'oddacioustreasures-com-staging-db-backups'    = @(
+    @{ fileNamePrefix = 'daily/'; daysFromUploadingToHiding = 31; daysFromHidingToDeleting = 1 },
+    @{ fileNamePrefix = 'monthly/'; daysFromUploadingToHiding = 366; daysFromHidingToDeleting = 1 }
+  )
+  'oddacioustreasures-com-staging-media-backups' = @(
+    @{ fileNamePrefix = ''; daysFromUploadingToHiding = $null; daysFromHidingToDeleting = 365 }
+  )
+}
+for ($i = 0; $i -lt $Buckets.Count; $i++) {
+  Invoke-B2 "$api/b2api/v3/b2_update_bucket" $token @{
+    accountId = $accountId; bucketId = $bucketIds[$i]; lifecycleRules = $lifecycle[$Buckets[$i]]
+  } | Out-Null
+  Write-Host "ok  lifecycle rules set on $($Buckets[$i])"
+}
+
 function New-Key([string]$KeyName, [string[]]$Capabilities) {
   Invoke-B2 "$api/b2api/v3/b2_create_key" $token @{
     accountId = $accountId; keyName = $KeyName; capabilities = $Capabilities; bucketIds = $bucketIds
