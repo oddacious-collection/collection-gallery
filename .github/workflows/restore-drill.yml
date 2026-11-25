@@ -1,0 +1,53 @@
+# Restore drill (BAK-08): restores the newest Backblaze backup into a scratch
+# D1 database on the staging account, compares it row for row with the
+# export, checks every backed-up private file, then deletes the scratch
+# database. The live staging database is never touched.
+#
+# Runs on demand (Actions -> Restore drill -> Run workflow) and quarterly.
+# GitHub emails the repository owner when a scheduled run fails. Prints
+# labels and counts only (CI logs are public). See docs/runbooks/restore-drill.md.
+name: Restore drill
+
+on:
+  schedule:
+    - cron: '23 7 2 1,4,7,10 *' # 07:23 UTC on the 2nd of Jan, Apr, Jul, Oct
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: Keep the restored database (for a real restore, docs/runbooks/restore-drill.md)
+        type: boolean
+        default: false
+
+permissions: {}
+
+env:
+  WRANGLER_SEND_METRICS: 'false'
+  FORCE_COLOR: '0'
+
+jobs:
+  drill:
+    name: restore drill (staging)
+    if: ${{ vars.BACKUPS_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: staging
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Restore the newest backup into a scratch database and check it
+        run: npm run restore:drill
+        env:
+          DRILL_KEEP: ${{ inputs.keep }}
+          B2_VERIFY_KEY_ID: ${{ secrets.B2_VERIFY_KEY_ID }}
+          B2_VERIFY_APP_KEY: ${{ secrets.B2_VERIFY_APP_KEY }}
+          # D1 edit: create, load, read and delete the scratch database only.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

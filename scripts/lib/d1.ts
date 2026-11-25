@@ -13,10 +13,13 @@ export const ROOT = path.join(import.meta.dirname, '../..');
 /** Where to run: local state (optionally another directory) or a remote database. */
 export type D1Target =
   | { kind: 'local'; persistTo?: string; database?: string }
-  | { kind: 'remote'; env: 'staging'; database?: string };
+  | { kind: 'remote'; env: 'staging'; database?: string }
+  /** A remote database described by its own config file (the restore drill's scratch database). */
+  | { kind: 'remote-config'; config: string; database?: string };
 
 function targetArgs(t: D1Target): string[] {
   const config = path.join(ROOT, 'apps/admin/wrangler.jsonc');
+  if (t.kind === 'remote-config') return ['--remote', '--config', t.config];
   if (t.kind === 'local') {
     return [
       '--local',
