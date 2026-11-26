@@ -16,7 +16,9 @@
     "@astrojs/cloudflare": "14.4.8",
     "@cg/core": "*",
     "@jsquash/webp": "1.5.0",
+    "@mediabunny/aac-encoder": "1.66.0",
     "astro": "7.4.12",
+    "mediabunny": "1.66.0",
     "zod": "4.6.7"
   },
   "devDependencies": {

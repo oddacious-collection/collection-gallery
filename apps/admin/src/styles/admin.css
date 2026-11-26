@@ -595,3 +595,10 @@ input[type='file'] {
 [data-inbox-dialog-message].error {
   color: var(--danger);
 }
+
+/* Video check page (M4 step 2): plain-text reports. */
+pre.report {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}

@@ -1,8 +1,34 @@
 # Progress
 
-## Status: M1 Core gallery — exit criteria met 2026-11-25, awaiting owner review (M0 complete 2026-11-22)
+## Status: M4 Video — kickoff approved 2026-11-25 (M1 complete 2026-11-25; M4 is built before M2, D-59)
 
-## M1 Core gallery (exit criteria met 2026-11-25; awaiting owner review)
+## M4 Video (in progress; built before M2, D-59)
+
+Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 120 s with trimming, a private master plus the public file, chunked uploads, playback in every current browser (H.264 + AAC MP4), Mediabunny for video processing, and the Instagram import plan (built in M2).
+
+**Exit criteria (§12, D-59):**
+
+- A 120 s iPhone clip uploads from the phone.
+- It plays muted; the sound preference carries to the next video; it plays in Safari, Chrome, Edge, Firefox and DuckDuckGo.
+- No location or other metadata in any stored file.
+- Range requests work in Safari.
+
+### Plan (one PR per step; each goes through CI and staging)
+
+1. [x] Kickoff docs: D-59 to D-62, this plan.
+2. [~] Device test page in the staging admin (`/tools/video-check`): what the owner's iPhone and desktop browser can decode and encode (H.264, HEVC, AAC), and a sample clip processed end to end. Owner runs it on both devices.
+3. [ ] Server: chunked upload (R2 multipart), MP4 verification on arrival (allow-listed boxes, no metadata, codecs, duration, size, `moov` first), video and poster records, Range serving with the visibility rule.
+4. [ ] Uploader: processing in a Web Worker with progress and the screen kept awake; trim; "Remove audio" (MED-09); poster frame choice; optional WebVTT captions (MED-12).
+5. [ ] Public player (PUB-06): muted autoplay, only the on-screen video plays, sound preference for the visit (page memory only), iOS sound pool, inline in carousel and feed.
+6. [ ] Tests: over-length and wrong-format files refused, no metadata in outputs (real iPhone clip with location on), playback rules (TST-06), leak suite covers video files and captions. Playback tests need a browser build with H.264 (Playwright's own Chromium and Firefox builds lack it; WebKit or branded Chrome).
+7. [ ] Owner exit test on iPhone; M4 review.
+
+### Owner tasks for M4
+
+- [ ] Run the device test page on the iPhone and the desktop browser (step 2).
+- [ ] Exit test: a 2-minute iPhone clip, uploaded from the phone.
+
+## M1 Core gallery (complete 2026-11-25)
 
 Kickoff 2026-11-23. The owner approved decisions D-42 to D-49 (D-49: the owner is named only by a pen name, currently Insignificant Nobody), the D-21/D-22/D-26 amendments, and this plan.
 
@@ -259,24 +285,25 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 
 ### Dependencies (exact-pinned; one-line justification each)
 
-| Package                                                                             | Where                | Why                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `astro`                                                                             | apps                 | Settled framework (D-02)                                                                                                                                                                             |
-| `@astrojs/cloudflare`                                                               | apps                 | Official Workers adapter for Astro                                                                                                                                                                   |
-| `@cg/core`                                                                          | apps                 | Internal shared package (ARC-02)                                                                                                                                                                     |
-| `zod`                                                                               | core                 | Validation at trust boundaries (SEC-05, settled stack)                                                                                                                                               |
-| `jose`                                                                              | core                 | Standard, dependency-free JWT/JWKS verification for SEC-03 (Web Crypto, works in Workers)                                                                                                            |
-| `drizzle-orm`                                                                       | core                 | Settled ORM, parameterised queries                                                                                                                                                                   |
-| `drizzle-kit` (dev)                                                                 | core                 | Generates forward-only SQL migrations (OPS-03). Its transitive `@esbuild-kit/*` deps are old but dev-only, never shipped                                                                             |
-| `wrangler` (dev)                                                                    | root, apps           | Cloudflare CLI: dev, deploy, D1 migrations, types                                                                                                                                                    |
-| `typescript` (dev)                                                                  | root, apps           | Strict typing; held at 6.0 for tool compatibility (D-33)                                                                                                                                             |
-| `@astrojs/check` (dev)                                                              | apps                 | Typechecks `.astro` files                                                                                                                                                                            |
-| `vitest` (dev)                                                                      | core                 | Unit/integration tests (TST-01)                                                                                                                                                                      |
-| `@cloudflare/vitest-plugin` (dev)                                                   | core                 | Runs tests inside workerd (TST-01, D-34)                                                                                                                                                             |
-| `@cloudflare/workers-types` (dev)                                                   | core, apps           | Workers runtime types                                                                                                                                                                                |
-| `@playwright/test` (dev)                                                            | root                 | E2E across Chromium + WebKit (TST-01)                                                                                                                                                                |
-| `@axe-core/playwright` (dev)                                                        | root                 | Accessibility checks in CI (NFR-03)                                                                                                                                                                  |
-| `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-astro`, `globals` (dev) | root                 | Linting incl. the INV-1 import boundary                                                                                                                                                              |
-| `prettier`, `prettier-plugin-astro` (dev)                                           | root                 | Formatting                                                                                                                                                                                           |
-| `@types/node` (dev)                                                                 | root                 | Types for build/test scripts                                                                                                                                                                         |
-| `@jsquash/webp`                                                                     | admin (browser only) | WebP encoding on the device (D-44): Safari can't encode WebP from a canvas. libwebp compiled to WASM, Apache-2.0, widely used; brings `wasm-feature-detect` (SIMD check). Never in the public bundle |
+| Package                                                                             | Where                | Why                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `astro`                                                                             | apps                 | Settled framework (D-02)                                                                                                                                                                                                         |
+| `@astrojs/cloudflare`                                                               | apps                 | Official Workers adapter for Astro                                                                                                                                                                                               |
+| `@cg/core`                                                                          | apps                 | Internal shared package (ARC-02)                                                                                                                                                                                                 |
+| `zod`                                                                               | core                 | Validation at trust boundaries (SEC-05, settled stack)                                                                                                                                                                           |
+| `jose`                                                                              | core                 | Standard, dependency-free JWT/JWKS verification for SEC-03 (Web Crypto, works in Workers)                                                                                                                                        |
+| `drizzle-orm`                                                                       | core                 | Settled ORM, parameterised queries                                                                                                                                                                                               |
+| `drizzle-kit` (dev)                                                                 | core                 | Generates forward-only SQL migrations (OPS-03). Its transitive `@esbuild-kit/*` deps are old but dev-only, never shipped                                                                                                         |
+| `wrangler` (dev)                                                                    | root, apps           | Cloudflare CLI: dev, deploy, D1 migrations, types                                                                                                                                                                                |
+| `typescript` (dev)                                                                  | root, apps           | Strict typing; held at 6.0 for tool compatibility (D-33)                                                                                                                                                                         |
+| `@astrojs/check` (dev)                                                              | apps                 | Typechecks `.astro` files                                                                                                                                                                                                        |
+| `vitest` (dev)                                                                      | core                 | Unit/integration tests (TST-01)                                                                                                                                                                                                  |
+| `@cloudflare/vitest-plugin` (dev)                                                   | core                 | Runs tests inside workerd (TST-01, D-34)                                                                                                                                                                                         |
+| `@cloudflare/workers-types` (dev)                                                   | core, apps           | Workers runtime types                                                                                                                                                                                                            |
+| `@playwright/test` (dev)                                                            | root                 | E2E across Chromium + WebKit (TST-01)                                                                                                                                                                                            |
+| `@axe-core/playwright` (dev)                                                        | root                 | Accessibility checks in CI (NFR-03)                                                                                                                                                                                              |
+| `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-astro`, `globals` (dev) | root                 | Linting incl. the INV-1 import boundary                                                                                                                                                                                          |
+| `prettier`, `prettier-plugin-astro` (dev)                                           | root                 | Formatting                                                                                                                                                                                                                       |
+| `@types/node` (dev)                                                                 | root                 | Types for build/test scripts                                                                                                                                                                                                     |
+| `@jsquash/webp`                                                                     | admin (browser only) | WebP encoding on the device (D-44): Safari can't encode WebP from a canvas. libwebp compiled to WASM, Apache-2.0, widely used; brings `wasm-feature-detect` (SIMD check). Never in the public bundle                             |
+| `mediabunny`, `@mediabunny/aac-encoder`                                             | admin (browser only) | Video reading, conversion to H.264 + AAC MP4, trimming and poster frames with WebCodecs (D-61); the AAC package is a WebAssembly fallback where a browser has no AAC encoder. MPL-2.0, zero dependencies, ~8 M weekly downloads. |
