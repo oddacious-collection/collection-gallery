@@ -38,7 +38,6 @@ const DENIED_FEATURES = [
   'midi',
   'payment',
   'publickey-credentials-get',
-  'screen-wake-lock',
   'serial',
   'usb',
   'xr-spatial-tracking',
@@ -46,13 +45,16 @@ const DENIED_FEATURES = [
 
 export function permissionsPolicy(host: HostKind): string {
   // autoplay: muted feed video (PUB-06); fullscreen: slideshow (PUB-11).
-  // camera (admin only): photographing items / barcode scan (ADM-01, ADM-14).
+  // Admin only: camera (photographing items / barcode scan, ADM-01, ADM-14)
+  // and screen-wake-lock (the phone screen stays on while a video is
+  // processed on the device, D-63). The public site denies both.
+  const ADMIN_ONLY = ['camera', 'screen-wake-lock'];
   const allowSelf =
     host === 'admin'
-      ? ['autoplay', 'camera', 'fullscreen', 'picture-in-picture']
+      ? ['autoplay', ...ADMIN_ONLY, 'fullscreen', 'picture-in-picture']
       : ['autoplay', 'fullscreen', 'picture-in-picture'];
   const denied: readonly string[] =
-    host === 'admin' ? DENIED_FEATURES : [...DENIED_FEATURES, 'camera'];
+    host === 'admin' ? DENIED_FEATURES : [...DENIED_FEATURES, ...ADMIN_ONLY];
   return [...denied.map((f) => `${f}=()`), ...allowSelf.map((f) => `${f}=(self)`)].join(', ');
 }
 
