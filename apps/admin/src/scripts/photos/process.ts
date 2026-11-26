@@ -217,3 +217,44 @@ export function partLabel(part: Pick<PlannedPart, 'role' | 'width' | 'height'>):
   if (part.role === 'og') return 'link-preview image';
   return `${Math.max(part.width, part.height)} px web size`;
 }
+
+/**
+ * A video's poster files (D-60): the public photo sizes for one frame,
+ * without a private copy (the poster can be made again from the video
+ * master). Names match the server's plan: `poster-w400` … and `og`.
+ */
+export async function processPoster(
+  frame: CanvasImageSource,
+  width: number,
+  height: number,
+  encodeWebp: WebpEncoder,
+  onStep: (label: string) => void = () => {},
+): Promise<Map<string, Uint8Array>> {
+  const master = drawScaled(frame, width, height, width, height);
+  try {
+    const files = new Map<string, Uint8Array>();
+    for (const part of uploadPlan(width, height)) {
+      if (part.role === 'original') continue;
+      onStep(`Making the poster's ${partLabel(part)}`);
+      await new Promise((r) => setTimeout(r, 0));
+      const scaled = drawScaled(master, width, height, part.width, part.height);
+      let bytes: Uint8Array;
+      try {
+        bytes =
+          part.format === 'image/jpeg'
+            ? await encodeJpeg(scaled, JPEG_QUALITY.og)
+            : await encodeWebp(context(scaled).getImageData(0, 0, part.width, part.height));
+      } finally {
+        release(scaled);
+      }
+      const check = verifyPart(bytes, part);
+      if (!check.ok) {
+        throw new PhotoError('encode_failed', `poster ${part.name}: ${check.reason}`);
+      }
+      files.set(part.role === 'og' ? 'og' : `poster-${part.name}`, bytes);
+    }
+    return files;
+  } finally {
+    release(master);
+  }
+}

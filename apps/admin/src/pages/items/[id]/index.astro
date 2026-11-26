@@ -30,6 +30,11 @@ const [tree, blockers, photos, inboxCount] = await Promise.all([
   countInbox(env.DB),
 ]);
 /** Thumbnail size within a square box, aspect kept. */
+/** 83 → "1:23". */
+const clock = (s: number) => {
+  const t = Math.round(s);
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
 const fit = (p: { width: number; height: number }, box: number) =>
   p.width >= p.height
     ? { width: box, height: Math.max(1, Math.round((box * p.height) / p.width)) }
@@ -326,9 +331,9 @@ const REASON: Record<string, string> = {
   </form>
 
   <section class="card" id="photos" data-photos data-item-id={id} aria-labelledby="photos-h">
-    <h2 id="photos-h">Photos</h2>
+    <h2 id="photos-h">Photos and videos</h2>
     {photos.active.length === 0 ? (
-      <p class="muted">No photos yet.</p>
+      <p class="muted">No photos or videos yet.</p>
     ) : (
       <ol class="photos" data-item-id={id}>
         {photos.active.map((p, i) => (
@@ -340,8 +345,13 @@ const REASON: Record<string, string> = {
             )}
             <div class="photo-tools">
               <p class="hint">
-                {p.isCover ? <span class="badge public">Cover</span> : `Photo ${i + 1}`} · {p.width}
-                ×{p.height}
+                {p.isCover ? (
+                  <span class="badge public">Cover</span>
+                ) : (
+                  `${p.kind === 'video' ? 'Video' : 'Photo'} ${i + 1}`
+                )}{' '}
+                {p.kind === 'video' && p.durationS !== null && `· ${clock(p.durationS)} `}·{' '}
+                {p.width}×{p.height}
               </p>
               <form
                 data-api={`/api/media/${p.id}`}
@@ -424,6 +434,51 @@ const REASON: Record<string, string> = {
           the cleaned copies are uploaded.
         </p>
         <ul class="photo-progress" data-photo-progress aria-live="polite"></ul>
+        <div class="video-add" data-videos data-item-id={id}>
+          <label for="video-input">Add a video</label>
+          <input
+            id="video-input"
+            type="file"
+            accept="video/mp4,video/quicktime,.mp4,.mov"
+            data-video-input
+          />
+          <p class="hint">
+            Up to 2 minutes. Processed on this device: location, device and date details are
+            removed, and a web version is made. On iPhone, in the picker choose Options → Format →
+            Current, or iOS sends a shrunk copy.
+          </p>
+          <div class="video-panel" data-video-panel hidden>
+            <p data-video-info></p>
+            <p class="warning" data-video-warning hidden></p>
+            <fieldset>
+              <legend>Poster (the picture shown before it plays)</legend>
+              <div class="poster-choices" data-video-posters></div>
+            </fieldset>
+            <fieldset>
+              <legend>Trim (seconds)</legend>
+              <label>
+                Start <input type="number" min="0" step="0.1" data-video-start />
+              </label>
+              <label>
+                End <input type="number" min="0" step="0.1" data-video-end />
+              </label>
+              <p class="hint" data-video-length></p>
+            </fieldset>
+            <label>
+              <input type="checkbox" data-video-mute /> Remove sound
+            </label>
+            <p>
+              <button type="button" class="primary" data-video-upload>
+                Process and upload
+              </button>
+              <button type="button" data-video-stop hidden>
+                Stop
+              </button>
+            </p>
+            <progress max="1" value="0" data-video-progress hidden></progress>
+            <p aria-live="polite" data-video-status></p>
+          </div>
+        </div>
       </>
     )}
     {photos.removed.length > 0 && (
@@ -498,5 +553,6 @@ const REASON: Record<string, string> = {
 
 <script>
   import '../../../scripts/photos/upload.ts';
+  import '../../../scripts/video/upload.ts';
   import '../../../scripts/new-category.ts';
 </script>
