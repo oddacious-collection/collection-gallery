@@ -1,0 +1,62 @@
+---
+/**
+ * Video device check (M4 step 2, D-61): what this browser can do with video,
+ * then one clip processed end to end on this device. Nothing is uploaded:
+ * the result stays in this browser, with a download link to try it in other
+ * browsers.
+ */
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="Video check · Admin">
+  <h1>Video check</h1>
+  <p class="muted">
+    Tests what this browser can do with video, for the video uploader. Nothing is uploaded.
+  </p>
+
+  <section class="card" aria-labelledby="caps-h">
+    <h2 id="caps-h">1. What this browser supports</h2>
+    <pre id="caps" class="report">Checking…</pre>
+  </section>
+
+  <section class="card" aria-labelledby="clip-h">
+    <h2 id="clip-h">2. Process a clip</h2>
+    <p>
+      Pick a video (for the real test: a 2-minute iPhone clip with location turned on). It is
+      converted here, on this device, the way the uploader will do it.
+    </p>
+    <p>
+      <label for="clip">Video file</label>
+      <input id="clip" type="file" accept="video/mp4,video/quicktime,.mov,.mp4" />
+    </p>
+    <p>
+      <label>
+        <input id="trim" type="checkbox" /> Only the first 10 seconds (quick test)
+      </label>
+    </p>
+    <p>
+      <button id="run" class="primary" type="button" disabled>
+        Process
+      </button>
+      <button id="stop" type="button" hidden>
+        Stop
+      </button>
+    </p>
+    <progress id="progress" max="1" value="0" hidden></progress>
+    <pre id="result" class="report" aria-live="polite"></pre>
+    <p id="download-row" hidden>
+      <a id="download" download="video-check.mp4">
+        Download the result
+      </a>{' '}
+      to try it in other browsers.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>3. Send the results</h2>
+    <p>Take a screenshot of both boxes above (or copy the text) and send it to Claude.</p>
+  </section>
+</Admin>
+<script>
+  import '../../scripts/video-check.ts';
+</script>
