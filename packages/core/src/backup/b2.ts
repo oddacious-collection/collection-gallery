@@ -226,3 +226,67 @@ export async function downloadFile(
   if (!res.ok) await check(res);
   return new Uint8Array(await res.arrayBuffer());
 }
+
+/**
+ * Uploads a large file as a stream, so it never has to fit in memory (video
+ * masters are up to 100 MB; a Worker has 128 MB). B2 accepts the SHA-1 after
+ * the data (`hex_digits_at_end`): the stream is hashed as it passes through
+ * and the 40 hex digits are appended. `open` is called again on each retry,
+ * since a stream can only be read once. Workers runtime only (DigestStream,
+ * FixedLengthStream).
+ */
+export async function uploadFileStream(
+  s: B2Session,
+  bucket: string,
+  fileName: string,
+  size: number,
+  open: () => Promise<ReadableStream<Uint8Array>>,
+  opts: UploadOptions,
+  f: Fetch = fetch,
+): Promise<{ fileId: string }> {
+  return withRetry(async () => {
+    const target = await callOnce<{ uploadUrl: string; authorizationToken: string }>(
+      s,
+      'b2_get_upload_url',
+      { bucketId: bucket },
+      f,
+    );
+    // Workers runtime only (the Node scripts that share this module never upload).
+    const { DigestStream } = crypto as unknown as { DigestStream: DigestStreamCtor };
+    const digest = new DigestStream('SHA-1');
+    const writer = digest.getWriter();
+    const hashThrough = new TransformStream<Uint8Array, Uint8Array>({
+      async transform(chunk, controller) {
+        await writer.write(chunk);
+        controller.enqueue(chunk);
+      },
+      async flush(controller) {
+        await writer.close();
+        const sha = new Uint8Array(await digest.digest);
+        const hex = Array.from(sha, (b) => b.toString(16).padStart(2, '0')).join('');
+        controller.enqueue(new TextEncoder().encode(hex));
+      },
+    });
+    const total = size + 40;
+    const body = (await open()).pipeThrough(hashThrough).pipeThrough(new FixedLengthStream(total));
+    const headers: Record<string, string> = {
+      authorization: target.authorizationToken,
+      'X-Bz-File-Name': encodeName(fileName),
+      'Content-Type': opts.contentType,
+      'Content-Length': String(total),
+      'X-Bz-Content-Sha1': 'hex_digits_at_end',
+      'X-Bz-Server-Side-Encryption': 'AES256',
+      'X-Bz-File-Retention-Mode': 'governance',
+      'X-Bz-File-Retention-Retain-Until-Timestamp': String(opts.retainUntil.getTime()),
+    };
+    for (const [k, v] of Object.entries(opts.info ?? {}))
+      headers[`X-Bz-Info-${k}`] = encodeURIComponent(v);
+    const res = await f(target.uploadUrl, { method: 'POST', headers, body });
+    const out = (await check(res)) as { fileId: string };
+    return { fileId: out.fileId };
+  });
+}
+
+type DigestStreamCtor = new (
+  algorithm: string,
+) => WritableStream<ArrayBuffer | ArrayBufferView> & { readonly digest: Promise<ArrayBuffer> };

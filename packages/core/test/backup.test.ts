@@ -88,7 +88,19 @@ class FakeB2 {
         // What B2 sent on 2026-11-25: a 524 timeout with a non-JSON body.
         return new Response('<html>timeout</html>', { status: 524 });
       }
-      const bytes = new Uint8Array(init?.body as Uint8Array);
+      let bytes = new Uint8Array(await new Response(init?.body ?? null).arrayBuffer());
+      if (Number(headers['content-length']) !== bytes.length) {
+        return json({ code: 'bad_request', message: 'length' }, 400);
+      }
+      // Streamed uploads send the SHA-1 after the data, as B2 allows.
+      const declared =
+        headers['x-bz-content-sha1'] === 'hex_digits_at_end'
+          ? new TextDecoder().decode(bytes.slice(-40))
+          : headers['x-bz-content-sha1'];
+      if (headers['x-bz-content-sha1'] === 'hex_digits_at_end') bytes = bytes.slice(0, -40);
+      if (declared !== (await sha1(bytes))) {
+        return json({ code: 'bad_request', message: 'sha1' }, 400);
+      }
       this.files.push({
         name: decodeURIComponent(headers['x-bz-file-name'] ?? ''),
         bucketId: url.pathname.split('/').pop() ?? '',
@@ -232,6 +244,23 @@ describe('a backup run', () => {
       /refusing to hide/,
     );
     expect(fake.files.every((x) => !x.hidden)).toBe(true);
+  });
+
+  it('streams a large original (a video master) instead of reading it into memory', async () => {
+    const fake = new FakeB2();
+    const big = new Uint8Array(20 * 1024 * 1024);
+    for (let i = 0; i < big.length; i += 4096) big[i] = i & 0xff;
+    await env.MEDIA_PRIVATE.put('bigmaster000000000000001', big, {
+      httpMetadata: { contentType: 'video/mp4' },
+    });
+    const report = await runBackup(config, env, 'media', new Date(), fake.fetch);
+    expect(report.media.failed).toBe(0);
+    const [stored] = fake.named('media-private/bigmaster000000000000001');
+    expect(stored?.headers['x-bz-content-sha1']).toBe('hex_digits_at_end');
+    expect(stored?.headers['x-bz-file-retention-mode']).toBe('governance');
+    expect(stored?.bytes.length).toBe(big.length);
+    expect(await sha1(stored?.bytes ?? new Uint8Array())).toBe(await sha1(big));
+    await env.MEDIA_PRIVATE.delete('bigmaster000000000000001');
   });
 
   it('retries a B2 timeout (524) with a fresh upload URL, then succeeds', async () => {

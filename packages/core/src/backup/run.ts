@@ -24,6 +24,7 @@ import {
   hideFile,
   listFileNames,
   uploadFile,
+  uploadFileStream,
   type B2Session,
   type Fetch,
 } from './b2.ts';
@@ -36,6 +37,8 @@ export const MEDIA_RETAIN_DAYS = 365;
 export const MEDIA_PREFIX = 'media-private/';
 /** Uploads per run: well within one cron invocation's time and subrequests. */
 export const MAX_UPLOADS_PER_RUN = 200;
+/** Files larger than this are streamed to B2 instead of read into memory. */
+export const STREAM_ABOVE_BYTES = 16 * 1024 * 1024;
 
 export const BackupConfigSchema = z.object({
   ENVIRONMENT: z.enum(['local', 'staging', 'production']),
@@ -116,20 +119,39 @@ export async function syncMedia(
   let firstError: string | null = null;
   for (const key of missing.slice(0, maxUploads)) {
     try {
-      const obj = await source.get(key);
-      if (!obj) continue; // deleted since listing
-      const bytes = new Uint8Array(await obj.arrayBuffer());
-      await uploadFile(
-        s,
-        bucket,
-        `${MEDIA_PREFIX}${key}`,
-        bytes,
-        {
-          contentType: obj.httpMetadata?.contentType ?? 'application/octet-stream',
-          retainUntil: new Date(now.getTime() + MEDIA_RETAIN_DAYS * DAY_MS),
-        },
-        f,
-      );
+      const head = await source.head(key);
+      if (!head) continue; // deleted since listing
+      const opts = {
+        contentType: head.httpMetadata?.contentType ?? 'application/octet-stream',
+        retainUntil: new Date(now.getTime() + MEDIA_RETAIN_DAYS * DAY_MS),
+      };
+      if (head.size > STREAM_ABOVE_BYTES) {
+        // Video masters: streamed, never whole in memory (D-60).
+        await uploadFileStream(
+          s,
+          bucket,
+          `${MEDIA_PREFIX}${key}`,
+          head.size,
+          async () => {
+            const obj = await source.get(key);
+            if (!obj) throw new Error('original disappeared during backup');
+            return obj.body;
+          },
+          opts,
+          f,
+        );
+      } else {
+        const obj = await source.get(key);
+        if (!obj) continue;
+        await uploadFile(
+          s,
+          bucket,
+          `${MEDIA_PREFIX}${key}`,
+          new Uint8Array(await obj.arrayBuffer()),
+          opts,
+          f,
+        );
+      }
       uploaded++;
     } catch (err) {
       failed++;

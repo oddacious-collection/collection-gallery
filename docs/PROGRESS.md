@@ -16,8 +16,8 @@ Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 
 ### Plan (one PR per step; each goes through CI and staging)
 
 1. [x] Kickoff docs: D-59 to D-62, this plan.
-2. [~] Device test page in the staging admin (`/tools/video-check`): what the owner's iPhone and desktop browser can decode and encode (H.264, HEVC, AAC), and a sample clip processed end to end. Owner runs it on both devices.
-3. [ ] Server: chunked upload (R2 multipart), MP4 verification on arrival (allow-listed boxes, no metadata, codecs, duration, size, `moov` first), video and poster records, Range serving with the visibility rule.
+2. [x] Device test page in the staging admin (`/tools/video-check`), run by the owner 2026-11-25: iPhone Safari reads its HEVC 1080p camera clips and converts 166 s in 25 s, stripping Apple's `meta`/`keys`/`ilst` boxes and extra tracks; the iOS photo picker hands over a shrunk 360×480 copy unless Options → Format → Current (the setting sticks); the owner's desktop is Firefox 159: H.264 fine, no HEVC decoding (camera clips go up from the phone, or Chrome/Edge), no AAC encoder (AAC sound copied, D-64). Fixes found: screen wake lock on admin (D-63), copy AAC sound (D-64).
+3. [x] Server: chunked upload into R2 multipart (8 MiB chunks; `media_upload_chunks`, migration 0005); chunk 0 (the header) checked completely before storing (`media/mp4.ts`: top level exactly ftyp/moov/mdat, allow-listed boxes, zero timestamps, plain-text names, one H.264 + at most one AAC track, ≤120 s, ≤1080p, samples tiling `mdat` exactly so no hidden bytes); declared size/duration/sound must match; poster files checked like photos; finalize completes the files and adds a `video` media row with `video`/`poster`/`og` variants; Range serving (from M1) with the visibility rule; stale uploads aborted. Backups stream files over 16 MiB to B2 with the SHA-1 at the end (video masters don't fit a Worker's memory).
 4. [ ] Uploader: processing in a Web Worker with progress and the screen kept awake; trim; "Remove audio" (MED-09); poster frame choice; optional WebVTT captions (MED-12).
 5. [ ] Public player (PUB-06): muted autoplay, only the on-screen video plays, sound preference for the visit (page memory only), iOS sound pool, inline in carousel and feed.
 6. [ ] Tests: over-length and wrong-format files refused, no metadata in outputs (real iPhone clip with location on), playback rules (TST-06), leak suite covers video files and captions. Playback tests need a browser build with H.264 (Playwright's own Chromium and Firefox builds lack it; WebKit or branded Chrome).
@@ -25,8 +25,15 @@ Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 
 
 ### Owner tasks for M4
 
-- [ ] Run the device test page on the iPhone and the desktop browser (step 2).
+- [x] Run the device test page on the iPhone and the desktop browser (step 2, done 2026-11-25).
 - [ ] Exit test: a 2-minute iPhone clip, uploaded from the phone.
+
+### Owner requests for after M4 (2026-11-25)
+
+- **Design milestone** (after M4, before M2): the owner sends 3–5 sites they like; Claude proposes 2–3 design directions as mockups with real items; the chosen one is built as design tokens and components (self-hosted open-licence fonts, PRV-02; dark mode; accessibility checked).
+- **SBOM**: CycloneDX from `npm sbom` on every deploy, kept as a build artifact, plus a list of non-npm parts (ZAP image, GitHub Actions, fonts).
+- **Scheduled scans**: weekly CodeQL, ZAP against staging and an OSV check of the SBOM, with a heartbeat so GitHub's 60-day pause on scheduled jobs is noticed.
+- **IR / appsec bot** (after the SBOM): a scheduled Claude agent reads vulnerability feeds (OSV, GitHub advisories, CISA KEV, vendor notices), checks impact against the SBOM, and opens a GitHub issue with a response plan (detect, assess, contain, eradicate, recover, post-mortem), optionally a fix PR for review. Read access plus issue creation only; feed content treated as data. Cost estimate before building.
 
 ## M1 Core gallery (complete 2026-11-25)
 

@@ -22,12 +22,26 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { z } from 'zod';
-import { auditLog, inboxPhotos, items, media, mediaUploads, mediaVariants } from '../db/schema.ts';
+import {
+  auditLog,
+  inboxPhotos,
+  items,
+  media,
+  mediaUploadChunks,
+  mediaUploads,
+  mediaVariants,
+} from '../db/schema.ts';
 import { logEvent } from '../errors.ts';
 import { RANDOM_KEY_PATTERN, ULID_PATTERN, randomKey, ulid } from '../ids.ts';
 import {
   MAX_BYTES,
+  Mp4Error,
   PlanError,
+  VIDEO_MAX_DURATION_S,
+  VIDEO_MAX_LONG_EDGE,
+  VIDEO_MAX_SHORT_EDGE,
+  verifyMp4Header,
+  type Mp4Info,
   addJpegRights,
   addWebpRights,
   rightsFor,
@@ -56,12 +70,19 @@ export const MAX_UPLOAD_PART_BYTES = MAX_BYTES.original;
 
 const StoredPart = z.object({
   name: z.string(),
-  role: z.enum(['original', 'image', 'og']),
-  format: z.enum(['image/jpeg', 'image/webp']),
+  /** Photos: original, image, og. Videos (D-60): original (the MP4 master), video, poster, og. */
+  role: z.enum(['original', 'image', 'og', 'video', 'poster']),
+  format: z.enum(['image/jpeg', 'image/webp', 'video/mp4']),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   maxBytes: z.number().int().positive(),
   key: z.string().regex(RANDOM_KEY_PATTERN),
+  // Video files only: uploaded in chunks into an R2 multipart upload.
+  bytes: z.number().int().positive().optional(),
+  chunkSize: z.number().int().positive().optional(),
+  multipartId: z.string().min(1).optional(),
+  durationS: z.number().positive().optional(),
+  hasAudio: z.boolean().optional(),
 });
 type StoredPart = z.infer<typeof StoredPart>;
 const StoredParts = z.array(StoredPart);
@@ -186,8 +207,16 @@ export async function storeUploadPart(
   const upload = await loadUpload(db, uploadId, now);
   const part = upload.parts.find((p) => p.name === partName);
   if (!part) throw new DomainError('not_found');
+  if (part.format === 'video/mp4') {
+    throw new DomainError('invalid', { reason: 'video_sent_in_chunks', part: part.name });
+  }
 
-  const check = verifyPart(bytes, part);
+  // Poster images are checked exactly like photo files (role doesn't matter to the check).
+  const check = verifyPart(bytes, {
+    ...part,
+    format: part.format,
+    role: part.role === 'original' ? 'original' : part.role === 'og' ? 'og' : 'image',
+  });
   if (!check.ok) {
     logEvent('warn', 'upload_rejected', { part: part.name, reason: check.reason });
     throw new DomainError('invalid', {
@@ -258,6 +287,9 @@ export async function finalizeUpload(
   if (upload.itemId === null) throw new DomainError('not_found', { reason: 'inbox_upload' });
   const itemId = upload.itemId;
   const at = now.toISOString();
+  if (upload.parts.some((p) => p.format === 'video/mp4')) {
+    return finalizeVideo(db, buckets, uploadId, itemId, upload.parts, alt, actor, at);
+  }
   const change = await itemMediaChange(db, itemId, at);
   if (change.item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
 
@@ -572,6 +604,15 @@ export async function cleanupStaleUploads(
       rows.map((r) => r.id),
     ),
   );
+  // Unfinished video files: drop their stored chunks (D-60).
+  for (const p of parts) {
+    if (!p.multipartId) continue;
+    try {
+      await bucketFor(buckets, p).resumeMultipartUpload(p.key, p.multipartId).abort();
+    } catch {
+      // Already completed or aborted: deleteKeys below removes a completed file.
+    }
+  }
   await deleteKeys(
     buckets.MEDIA_PRIVATE,
     parts.filter((p) => p.role === 'original').map((p) => p.key),
@@ -996,4 +1037,269 @@ export async function countInbox(d1: D1Database): Promise<number> {
     .from(inboxPhotos)
     .where(isNull(inboxPhotos.deletedAt));
   return row?.n ?? 0;
+}
+
+// ------------------------------------------------------------------ video (D-60)
+//
+// A video upload has two MP4 files, made on the device: the private master
+// (higher bitrate, for M5's watermarking) and the public file, plus a poster
+// frame planned like a photo (public WebP sizes + og JPEG; no private copy,
+// the poster can be made again from the master). The MP4s don't fit a
+// Worker's memory, so each goes up in chunks into an R2 multipart upload.
+// Chunk 0 holds the header (`moov` first); it is checked completely before
+// it is stored, and that check proves the media data that follows can only
+// be the samples the header describes (media/mp4.ts).
+
+/** Chunk size for video files: every chunk but the last is exactly this long. */
+export const VIDEO_CHUNK_BYTES = 8 * 1024 * 1024;
+/** MED-03: the largest stored video file. */
+export const VIDEO_MAX_BYTES = 100 * 1024 * 1024;
+/** Declared and measured durations may differ by this much (container rounding). */
+const DURATION_TOLERANCE_S = 1;
+
+export const VideoBegin = z.strictObject({
+  width: z.number().int().positive().max(VIDEO_MAX_LONG_EDGE),
+  height: z.number().int().positive().max(VIDEO_MAX_LONG_EDGE),
+  durationS: z.number().positive().max(VIDEO_MAX_DURATION_S),
+  hasAudio: z.boolean(),
+  masterBytes: z.number().int().positive().max(VIDEO_MAX_BYTES),
+  videoBytes: z.number().int().positive().max(VIDEO_MAX_BYTES),
+});
+export type VideoBegin = z.infer<typeof VideoBegin>;
+
+/** What the browser needs to send each file (no storage keys). */
+export type VideoUploadPart = Omit<StoredPart, 'key' | 'multipartId'> & { chunks?: number };
+
+function chunkCount(part: Pick<StoredPart, 'bytes' | 'chunkSize'>): number {
+  return Math.ceil((part.bytes ?? 0) / (part.chunkSize ?? VIDEO_CHUNK_BYTES));
+}
+
+export async function beginVideoUpload(
+  d1: D1Database,
+  buckets: MediaBuckets,
+  itemId: string,
+  input: VideoBegin,
+  now: Date = new Date(),
+): Promise<{ uploadId: string; parts: VideoUploadPart[] }> {
+  const db = drizzle(d1);
+  const v = VideoBegin.parse(input);
+  if (
+    Math.max(v.width, v.height) > VIDEO_MAX_LONG_EDGE ||
+    Math.min(v.width, v.height) > VIDEO_MAX_SHORT_EDGE
+  ) {
+    throw new DomainError('invalid', { reason: 'video_too_large_picture' });
+  }
+  const [item] = await db
+    .select({ deletedAt: items.deletedAt })
+    .from(items)
+    .where(eq(items.id, itemId))
+    .limit(1);
+  if (!item) throw new DomainError('not_found');
+  if (item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
+  if ((await activeMediaIds(db, itemId)).length >= MAX_PHOTOS_PER_ITEM) {
+    throw new DomainError('conflict', { reasons: ['too_many_photos'] });
+  }
+  let poster: PlannedPart[];
+  try {
+    poster = uploadPlan(v.width, v.height).filter((p) => p.role !== 'original');
+  } catch (err) {
+    if (err instanceof PlanError) {
+      throw new DomainError('invalid', { reason: `poster_${err.reason}` });
+    }
+    throw err;
+  }
+
+  const uploadId = randomKey();
+  const videoFile = (name: 'original' | 'video', bytes: number): StoredPart => ({
+    name,
+    role: name,
+    format: 'video/mp4',
+    width: v.width,
+    height: v.height,
+    maxBytes: VIDEO_MAX_BYTES,
+    key: randomKey(),
+    bytes,
+    chunkSize: VIDEO_CHUNK_BYTES,
+    durationS: v.durationS,
+    hasAudio: v.hasAudio,
+  });
+  const files = [videoFile('original', v.masterBytes), videoFile('video', v.videoBytes)];
+  for (const f of files) {
+    const mpu = await bucketFor(buckets, f).createMultipartUpload(f.key, {
+      httpMetadata: {
+        contentType: 'video/mp4',
+        ...(f.role === 'original'
+          ? { contentDisposition: 'attachment; filename="original.mp4"' }
+          : {}),
+      },
+      customMetadata: { upload: uploadId, part: f.name },
+    });
+    f.multipartId = mpu.uploadId;
+  }
+  const parts: StoredPart[] = [
+    ...files,
+    ...poster.map((p): StoredPart => ({
+      ...p,
+      role: p.role === 'og' ? 'og' : 'poster',
+      name: p.role === 'og' ? 'og' : `poster-${p.name}`,
+      key: randomKey(),
+    })),
+  ];
+  await db.insert(mediaUploads).values({
+    id: uploadId,
+    itemId,
+    parts: JSON.stringify(parts),
+    createdAt: now.toISOString(),
+  });
+  return {
+    uploadId,
+    parts: parts.map(({ key: _key, multipartId: _mpu, ...p }) =>
+      p.format === 'video/mp4' ? { ...p, chunks: chunkCount(p) } : p,
+    ),
+  };
+}
+
+/** Stores chunk `n` (0-based) of a video file; chunk 0 must pass the MP4 header check. */
+export async function storeVideoChunk(
+  d1: D1Database,
+  buckets: MediaBuckets,
+  uploadId: string,
+  partName: string,
+  n: number,
+  bytes: Uint8Array,
+  now: Date = new Date(),
+): Promise<{ name: string; chunk: number; bytes: number }> {
+  const db = drizzle(d1);
+  const upload = await loadUpload(db, uploadId, now);
+  const part = upload.parts.find((p) => p.name === partName);
+  if (!part || part.format !== 'video/mp4' || !part.multipartId || !part.bytes) {
+    throw new DomainError('not_found');
+  }
+  const chunks = chunkCount(part);
+  const size = part.chunkSize ?? VIDEO_CHUNK_BYTES;
+  if (!Number.isInteger(n) || n < 0 || n >= chunks) throw new DomainError('not_found');
+  const expected = n < chunks - 1 ? size : part.bytes - size * (chunks - 1);
+  if (bytes.length !== expected) {
+    throw new DomainError('invalid', { reason: 'chunk_wrong_size', part: part.name, chunk: n });
+  }
+
+  if (n === 0) {
+    let info: Mp4Info;
+    try {
+      info = verifyMp4Header(bytes, part.bytes);
+    } catch (err) {
+      if (!(err instanceof Mp4Error)) throw err;
+      logEvent('warn', 'upload_rejected', { part: part.name, reason: err.reason });
+      throw new DomainError('invalid', {
+        reason: `video_${err.reason}`,
+        part: part.name,
+        ...(err.detail ? { detail: err.detail } : {}),
+      });
+    }
+    const mismatch =
+      info.width !== part.width ||
+      info.height !== part.height ||
+      info.hasAudio !== part.hasAudio ||
+      Math.abs(info.durationS - (part.durationS ?? 0)) > DURATION_TOLERANCE_S;
+    if (mismatch) {
+      logEvent('warn', 'upload_rejected', { part: part.name, reason: 'video_not_as_declared' });
+      throw new DomainError('invalid', { reason: 'video_not_as_declared', part: part.name });
+    }
+  }
+
+  const mpu = bucketFor(buckets, part).resumeMultipartUpload(part.key, part.multipartId);
+  const stored = await mpu.uploadPart(n + 1, bytes);
+  await db
+    .insert(mediaUploadChunks)
+    .values({ uploadId, part: part.name, n, etag: stored.etag, bytes: bytes.length })
+    .onConflictDoUpdate({
+      target: [mediaUploadChunks.uploadId, mediaUploadChunks.part, mediaUploadChunks.n],
+      set: { etag: stored.etag, bytes: bytes.length },
+    });
+  return { name: part.name, chunk: n, bytes: bytes.length };
+}
+
+/** Completes each video file (unless an earlier finalize already did). */
+async function completeVideoFiles(
+  db: Db,
+  buckets: MediaBuckets,
+  uploadId: string,
+  parts: StoredPart[],
+): Promise<void> {
+  for (const part of parts) {
+    if (part.format !== 'video/mp4' || !part.multipartId) continue;
+    const bucket = bucketFor(buckets, part);
+    const head = await bucket.head(part.key);
+    if (head && head.customMetadata?.['upload'] === uploadId && head.size === part.bytes) continue;
+    const rows = await db
+      .select()
+      .from(mediaUploadChunks)
+      .where(and(eq(mediaUploadChunks.uploadId, uploadId), eq(mediaUploadChunks.part, part.name)))
+      .orderBy(asc(mediaUploadChunks.n));
+    if (rows.length !== chunkCount(part) || rows.some((r, i) => r.n !== i)) {
+      throw new DomainError('conflict', { reasons: ['missing_files'], missing: [part.name] });
+    }
+    await bucket
+      .resumeMultipartUpload(part.key, part.multipartId)
+      .complete(rows.map((r) => ({ partNumber: r.n + 1, etag: r.etag })));
+  }
+}
+
+async function finalizeVideo(
+  db: Db,
+  buckets: MediaBuckets,
+  uploadId: string,
+  itemId: string,
+  parts: StoredPart[],
+  alt: string,
+  actor: string,
+  at: string,
+): Promise<{ mediaId: string }> {
+  const change = await itemMediaChange(db, itemId, at);
+  if (change.item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
+  await completeVideoFiles(db, buckets, uploadId, parts);
+  const { heads, original } = await storedFiles(buckets, uploadId, parts);
+  for (const { part, head } of heads) {
+    if (part.format === 'video/mp4' && head?.size !== part.bytes) {
+      throw new DomainError('conflict', { reasons: ['missing_files'], missing: [part.name] });
+    }
+  }
+  const active = await activeMediaIds(db, itemId);
+  const mediaId = ulid(Date.parse(at));
+  const master = original.part;
+  await run(db, [
+    db.insert(media).values({
+      id: mediaId,
+      itemId,
+      position: active.length,
+      isCover: active.length === 0,
+      kind: 'video',
+      originalKey: master.key,
+      width: master.width,
+      height: master.height,
+      durationS: master.durationS ?? null,
+      hasAudio: master.hasAudio ?? false,
+      altText: alt,
+      contentHash: null,
+      createdAt: at,
+    }),
+    ...heads
+      .filter(({ part }) => part.role !== 'original')
+      .map(({ part, head }) =>
+        db.insert(mediaVariants).values({
+          key: part.key,
+          mediaId,
+          role: part.role === 'video' ? 'video' : part.role === 'og' ? 'og' : 'poster',
+          width: part.width,
+          height: part.height,
+          format: part.format,
+          bytes: head?.size ?? 0,
+        }),
+      ),
+    db.delete(mediaUploads).where(eq(mediaUploads.id, uploadId)),
+    ...renumberOps(db, [...active, mediaId]),
+    ...change.ops([...active, mediaId]),
+    audit(db, 'media', actor, 'media.add', mediaId, { itemId, kind: 'video' }, at),
+  ]);
+  return { mediaId };
 }
