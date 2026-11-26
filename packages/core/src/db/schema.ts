@@ -201,6 +201,25 @@ export const mediaUploads = sqliteTable(
 );
 
 /**
+ * One stored chunk of a video file in a multipart upload (D-60): R2 needs
+ * every part's ETag to complete the file. Chunk 0 (the header) is recorded
+ * only after it passed the MP4 check. Removed with its upload. ADMIN.
+ */
+export const mediaUploadChunks = sqliteTable(
+  'media_upload_chunks',
+  {
+    uploadId: text('upload_id')
+      .notNull()
+      .references(() => mediaUploads.id, { onDelete: 'cascade' }),
+    part: text('part').notNull(),
+    n: integer('n').notNull(),
+    etag: text('etag').notNull(),
+    bytes: integer('bytes').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.uploadId, t.part, t.n] })],
+);
+
+/**
  * The photo inbox (D-55): photos uploaded without an item, waiting to be
  * assigned. Kept apart from `media` on purpose: public queries only ever
  * read `media`/`media_variants`, so an inbox photo can't reach the public

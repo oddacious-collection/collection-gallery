@@ -47,3 +47,12 @@ export {
   type PlannedPart,
 } from './plan.ts';
 export { verifyPart, type VerifyReason, type VerifyResult } from './verify.ts';
+export {
+  Mp4Error,
+  VIDEO_MAX_DURATION_S,
+  VIDEO_MAX_LONG_EDGE,
+  VIDEO_MAX_SHORT_EDGE,
+  verifyMp4Header,
+  type Mp4Info,
+  type Mp4Reason,
+} from './mp4.ts';

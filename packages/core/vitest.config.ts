@@ -11,6 +11,17 @@ export default defineConfig(async () => {
         miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
       }),
     ],
+    resolve: {
+      alias: {
+        // Tests build MP4 files with Mediabunny (the uploader's library). Its
+        // module build probes for Node built-ins, which workerd can't load;
+        // the single-file browser bundle doesn't.
+        mediabunny: path.join(
+          import.meta.dirname,
+          '../../node_modules/mediabunny/dist/bundles/mediabunny.mjs',
+        ),
+      },
+    },
     test: {
       include: ['test/**/*.test.ts'],
       setupFiles: ['./test/apply-migrations.ts'],
