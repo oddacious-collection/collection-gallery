@@ -28,7 +28,7 @@ Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 
 - [x] Run the device test page on the iPhone and the desktop browser (step 2, done 2026-11-25).
 - [ ] Exit test: a 2-minute iPhone clip, uploaded from the phone.
 
-### Owner requests for after M4 (2026-11-25)
+### Owner requests (2026-11-25), placed by Claude: SBOM and scheduled scans right after M4 (small, and the bot builds on them); design milestone after that, before M2; the IR/appsec bot after M2, folded into M7 hardening if it fits better there
 
 - **Design milestone** (after M4, before M2): the owner sends 3–5 sites they like; Claude proposes 2–3 design directions as mockups with real items; the chosen one is built as design tokens and components (self-hosted open-licence fonts, PRV-02; dark mode; accessibility checked).
 - **SBOM**: CycloneDX from `npm sbom` on every deploy, kept as a build artifact, plus a list of non-npm parts (ZAP image, GitHub Actions, fonts).
