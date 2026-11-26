@@ -95,6 +95,19 @@ describe('host differences', () => {
     ).toContain('camera=()');
   });
 
+  it('allows keeping the screen awake on admin only (D-63)', () => {
+    const admin = securityHeaders({ host: 'admin', environment: 'production' })[
+      'Permissions-Policy'
+    ];
+    const pub = securityHeaders({ host: 'public', environment: 'production' })[
+      'Permissions-Policy'
+    ];
+    expect(admin).toContain('screen-wake-lock=(self)');
+    expect(admin).not.toContain('screen-wake-lock=()');
+    expect(pub).toContain('screen-wake-lock=()');
+    expect(pub).not.toContain('screen-wake-lock=(self)');
+  });
+
   it('never indexes admin, staging or local; indexes public production', () => {
     expect(securityHeaders({ host: 'admin', environment: 'production' })['X-Robots-Tag']).toContain(
       'noindex',

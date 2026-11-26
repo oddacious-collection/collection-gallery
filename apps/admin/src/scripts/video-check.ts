@@ -55,7 +55,14 @@ async function audioDecode(codec: string): Promise<boolean> {
   }
 }
 
-let aacPolyfilled = false;
+/**
+ * Whether this browser can encode AAC. Where it can't (Firefox), AAC sound is
+ * copied unchanged: the library's WebAssembly fallback starts a worker from
+ * generated code, which the admin CSP and Trusted Types rightly forbid.
+ */
+let aacEncoder = false;
+/** `?copy` forces the copy path (to test it in browsers that can encode AAC). */
+const copySound = new URLSearchParams(location.search).has('copy');
 
 async function checkCaps(): Promise<void> {
   const lines: string[] = [];
@@ -84,18 +91,10 @@ async function checkCaps(): Promise<void> {
       await canEncodeVideo('avc', { width: 1080, height: 1920, bitrate: 4_500_000 }),
     )}`,
   );
-  const nativeAac = await canEncodeAudio('aac', { bitrate: 128_000 });
-  lines.push(`Encode AAC audio (built in): ${yes(nativeAac)}`);
-  if (!nativeAac) {
-    const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
-    registerAacEncoder();
-    aacPolyfilled = true;
-    lines.push(
-      `Encode AAC audio (WebAssembly fallback): ${yes(
-        await canEncodeAudio('aac', { bitrate: 128_000 }),
-      )}`,
-    );
-  }
+  aacEncoder = await canEncodeAudio('aac', { bitrate: 128_000 });
+  lines.push(
+    `Encode AAC audio: ${aacEncoder ? 'yes' : 'NO (AAC sound is copied as it is instead)'}`,
+  );
   const v = document.createElement('video');
   lines.push(
     `Plays H.264 + AAC MP4: ${v.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"') || 'NO'}`,
@@ -283,7 +282,9 @@ async function processClip(file: File): Promise<void> {
       bitrate: 4_500_000,
       forceTranscode: true,
     },
-    audio: { codec: 'aac', bitrate: 128_000, forceTranscode: true },
+    // AAC sound is copied as it is (no quality loss, works in every browser);
+    // other sound is re-encoded where the browser can encode AAC.
+    audio: aacEncoder && !copySound ? { codec: 'aac', bitrate: 128_000 } : { codec: 'aac' },
     tags: {},
     ...(trim.checked ? { trim: { end: Math.min(10, duration) } } : {}),
   });
@@ -316,7 +317,7 @@ async function processClip(file: File): Promise<void> {
   const out = new Blob([bytes], { type: 'video/mp4' });
   lines.push('');
   lines.push(
-    `Converted in ${seconds.toFixed(1)} s to ${(out.size / 1e6).toFixed(1)} MB (${even(w * scale)}×${even(h * scale)}${aacPolyfilled ? ', AAC via WebAssembly' : ''})`,
+    `Converted in ${seconds.toFixed(1)} s to ${(out.size / 1e6).toFixed(1)} MB (${even(w * scale)}×${even(h * scale)}${aacEncoder ? '' : ', sound copied'})`,
   );
   const check = new Input({ formats: ALL_FORMATS, source: new BufferSource(bytes) });
   const outVideo = await check.getPrimaryVideoTrack();
