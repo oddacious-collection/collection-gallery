@@ -252,3 +252,44 @@ export async function convertVideo(
   if (info.hasAudio !== keepAudio) throw new VideoError('self_check', 'sound');
   return { bytes, info };
 }
+
+/**
+ * A live frame preview for the poster/trim slider. `show(time)` draws the
+ * frame at `time` onto `target`; while one frame is being decoded, only the
+ * latest requested time is kept, so dragging stays responsive on a phone.
+ */
+export function framePreviewer(
+  src: VideoSource,
+  target: HTMLCanvasElement,
+  height = 270,
+): { show: (time: number) => void } {
+  const width = even((height * src.width) / src.height);
+  target.width = width;
+  target.height = height;
+  const sink = new CanvasSink(src.track, { width, height, fit: 'fill', poolSize: 1 });
+  const ctx = target.getContext('2d');
+  let busy = false;
+  let pending: number | null = null;
+  const draw = async (time: number): Promise<void> => {
+    busy = true;
+    try {
+      const frame = await sink.getCanvas(time);
+      if (frame && ctx) ctx.drawImage(frame.canvas, 0, 0, width, height);
+    } catch {
+      // A frame that can't be decoded just isn't shown.
+    } finally {
+      busy = false;
+    }
+    if (pending !== null) {
+      const next = pending;
+      pending = null;
+      void draw(next);
+    }
+  };
+  return {
+    show(time: number) {
+      if (busy) pending = time;
+      else void draw(time);
+    },
+  };
+}

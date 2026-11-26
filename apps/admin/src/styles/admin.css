@@ -631,3 +631,23 @@ pre.report {
 p.warning {
   font-weight: 600;
 }
+.video-preview {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 270px;
+  background: #000;
+}
+.scrub {
+  display: block;
+  margin: 0.5rem 0;
+}
+.scrub input[type='range'] {
+  width: 100%;
+  min-height: 2.5rem; /* easy to drag on a phone */
+}
+.video-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

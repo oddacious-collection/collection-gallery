@@ -19,6 +19,7 @@ import {
   VideoError,
   convertVideo,
   openVideo,
+  framePreviewer,
   posterFrame,
   thumbnails,
   type VideoSource,
@@ -88,6 +89,13 @@ interface PlannedFile {
   chunks?: number;
 }
 
+/** 12.34 → "0:12.3" (tenths, for the slider). */
+function fine(s: number): string {
+  const t = Math.max(0, Math.round(s * 10) / 10);
+  const m = Math.floor(t / 60);
+  return `${m}:${(t - m * 60).toFixed(1).padStart(4, '0')}`;
+}
+
 function clock(s: number): string {
   const t = Math.round(s);
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
@@ -118,6 +126,13 @@ function init(root: HTMLElement): void {
   const stop = q<HTMLButtonElement>('[data-video-stop]');
   const bar = q<HTMLProgressElement>('[data-video-progress]');
   const status = q<HTMLElement>('[data-video-status]');
+  const preview = q<HTMLCanvasElement>('[data-video-preview]');
+  const scrub = q<HTMLInputElement>('[data-video-scrub]');
+  const timeLabel = q<HTMLElement>('[data-video-time]');
+  const usePoster = q<HTMLButtonElement>('[data-video-use-poster]');
+  const setStart = q<HTMLButtonElement>('[data-video-set-start]');
+  const setEnd = q<HTMLButtonElement>('[data-video-set-end]');
+  const posterNote = q<HTMLElement>('[data-video-poster-note]');
   if (
     !itemId ||
     !input ||
@@ -132,13 +147,21 @@ function init(root: HTMLElement): void {
     !go ||
     !stop ||
     !bar ||
-    !status
+    !status ||
+    !preview ||
+    !scrub ||
+    !timeLabel ||
+    !usePoster ||
+    !setStart ||
+    !setEnd ||
+    !posterNote
   ) {
     return;
   }
 
   let src: VideoSource | null = null;
   let posterTime = 0;
+  let viewer: { show: (time: number) => void } | null = null;
   let cancel: (() => Promise<void>) | null = null;
   let stopped = false;
 
@@ -162,13 +185,26 @@ function init(root: HTMLElement): void {
         : 'The end must be after the start.';
     lengthNote.className = ok ? 'hint' : 'hint error';
     go.disabled = !ok;
+    notePoster();
     return ok;
+  };
+  /** Says which frame will be the poster, and if it falls outside the trim. */
+  const notePoster = () => {
+    const { start, end } = choices();
+    const outside = posterTime < start - 0.05 || posterTime > end + 0.05;
+    posterNote.textContent = outside
+      ? `The poster (${fine(posterTime)}) is outside the trimmed part, so the first frame of the trimmed video (${fine(start)}) will be used. Pick another frame to change it.`
+      : posterTime === 0
+        ? 'Poster: the first frame.'
+        : `Poster: the frame at ${fine(posterTime)}.`;
+    posterNote.className = outside ? 'hint warning' : 'hint';
   };
 
   input.addEventListener('change', () => {
     const file = input.files?.[0];
     if (!file) return;
     panel.hidden = true;
+    posterTime = 0;
     posters.replaceChildren();
     warning.hidden = true;
     say('Reading the video…');
@@ -198,6 +234,13 @@ function init(root: HTMLElement): void {
       mute.disabled = !s.hasAudio;
       panel.hidden = false;
       checkLength();
+      // The slider: a live frame preview to pick the poster or the trim by eye.
+      scrub.max = String(s.durationS);
+      scrub.value = '0';
+      timeLabel.textContent = fine(0);
+      viewer = framePreviewer(s, preview);
+      viewer.show(0);
+      notePoster();
       say(
         s.durationS > MAX_LENGTH_S
           ? 'Longer than 2 minutes: the first 2 minutes are selected.'
@@ -222,6 +265,10 @@ function init(root: HTMLElement): void {
           b.appendChild(canvas);
           b.addEventListener('click', () => {
             posterTime = times[i] ?? 0;
+            scrub.value = String(posterTime);
+            timeLabel.textContent = fine(posterTime);
+            viewer?.show(posterTime);
+            notePoster();
             posters
               .querySelectorAll('button')
               .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
@@ -232,6 +279,24 @@ function init(root: HTMLElement): void {
         posters.textContent = 'Previews aren’t available; the first frame will be the poster.';
       }
     })();
+  });
+  const at = () => Number(scrub.value) || 0;
+  scrub.addEventListener('input', () => {
+    timeLabel.textContent = fine(at());
+    viewer?.show(at());
+  });
+  usePoster.addEventListener('click', () => {
+    posterTime = at();
+    posters.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+    notePoster();
+  });
+  setStart.addEventListener('click', () => {
+    startInput.value = String(Math.round(at() * 10) / 10);
+    checkLength();
+  });
+  setEnd.addEventListener('click', () => {
+    endInput.value = String(Math.round(at() * 10) / 10);
+    checkLength();
   });
   startInput.addEventListener('input', checkLength);
   endInput.addEventListener('input', checkLength);

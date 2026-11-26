@@ -452,6 +452,28 @@ const REASON: Record<string, string> = {
             <p class="warning" data-video-warning hidden></p>
             <fieldset>
               <legend>Poster (the picture shown before it plays)</legend>
+              <canvas class="video-preview" data-video-preview aria-hidden="true"></canvas>
+              <label class="scrub">
+                <span>
+                  Position <span data-video-time>0:00.0</span>
+                </span>
+                <input type="range" min="0" step="0.05" value="0" data-video-scrub />
+              </label>
+              <p class="video-buttons">
+                <button type="button" data-video-use-poster>
+                  Use this frame as the poster
+                </button>
+                <button type="button" data-video-set-start>
+                  Set start here
+                </button>
+                <button type="button" data-video-set-end>
+                  Set end here
+                </button>
+              </p>
+              <p class="hint" data-video-poster-note>
+                Poster: the first frame.
+              </p>
+              <p class="hint">Quick picks (tap one to jump there):</p>
               <div class="poster-choices" data-video-posters></div>
             </fieldset>
             <fieldset>
