@@ -602,3 +602,52 @@ pre.report {
   overflow-wrap: anywhere;
   font-size: 0.85rem;
 }
+
+/* Video uploader (M4). */
+.video-add {
+  margin-top: 1.5rem;
+}
+.video-panel fieldset {
+  margin: 0.75rem 0;
+}
+.poster-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.poster-choice {
+  padding: 2px;
+  border: 3px solid transparent;
+  background: none;
+}
+.poster-choice[aria-pressed='true'] {
+  border-color: currentColor;
+}
+.poster-choice canvas {
+  display: block;
+  max-height: 96px;
+  width: auto;
+}
+p.warning {
+  font-weight: 600;
+}
+.video-preview {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 270px;
+  background: #000;
+}
+.scrub {
+  display: block;
+  margin: 0.5rem 0;
+}
+.scrub input[type='range'] {
+  width: 100%;
+  min-height: 2.5rem; /* easy to drag on a phone */
+}
+.video-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

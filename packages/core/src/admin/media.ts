@@ -341,7 +341,11 @@ export interface MediaView {
   width: number;
   height: number;
   altText: string;
-  /** Smallest public WebP (for thumbnails in admin). */
+  /** Photo or video (D-60). */
+  kind: 'image' | 'video';
+  /** Videos: length in seconds. */
+  durationS: number | null;
+  /** Smallest public WebP (for thumbnails in admin; a video's poster). */
   thumbKey: string | null;
   /** Largest public WebP. */
   largeKey: string | null;
@@ -374,7 +378,7 @@ export async function listItemMedia(
               mediaVariants.mediaId,
               rows.map((r) => r.id),
             ),
-            eq(mediaVariants.role, 'image'),
+            inArray(mediaVariants.role, ['image', 'poster']),
           ),
         )
     : [];
@@ -389,6 +393,8 @@ export async function listItemMedia(
       width: r.width,
       height: r.height,
       altText: r.altText,
+      kind: r.kind,
+      durationS: r.durationS,
       thumbKey: own[0]?.key ?? null,
       largeKey: own[own.length - 1]?.key ?? null,
       createdAt: r.createdAt,
@@ -425,7 +431,7 @@ export async function coverThumbKeys(
         inArray(media.itemId, itemIds),
         eq(media.isCover, true),
         isNull(media.deletedAt),
-        eq(mediaVariants.role, 'image'),
+        inArray(mediaVariants.role, ['image', 'poster']),
       ),
     );
   const best = new Map<string, number>();
