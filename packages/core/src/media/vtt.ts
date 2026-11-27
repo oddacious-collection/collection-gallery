@@ -1,6 +1,8 @@
 /**
  * Video captions (MED-12, D-65). The owner uploads a WebVTT (.vtt) or SubRip
- * (.srt) file; the server keeps that file privately as uploaded and publishes
+ * (.srt) file, or a plain .txt written by hand in the same shape with short
+ * times (`0:01 - 0:03`, then the text, then a blank line). Only the contents
+ * matter, never the file name. The server keeps the file privately as uploaded and publishes
  * a **rebuilt** WebVTT made only of cue timings, a few safe placement settings
  * and the cue text:
  *
@@ -56,14 +58,20 @@ interface Cue {
   text: string[];
 }
 
-const TIMESTAMP = /^(?:(\d{1,3}):)?([0-5]\d):([0-5]\d)[.,](\d{3})$/;
+/**
+ * Caption times. WebVTT (`00:01.500`, `00:00:01.500`), SubRip
+ * (`00:00:01,500`), and the short forms people type by hand: `0:01`,
+ * `1:02.5`, `0:00:07`. Minutes and seconds go up to 59; a fraction has 1 to 3
+ * digits (`.5` is half a second).
+ */
+const TIMESTAMP = /^(?:(\d{1,3}):)?([0-5]?\d):([0-5]\d)(?:[.,](\d{1,3}))?$/;
 
-/** Seconds from a WebVTT (`00:01.500`, `00:00:01.500`) or SubRip (`00:00:01,500`) time. */
+/** Seconds from a caption time, or null if it isn't one. */
 export function parseTimestamp(token: string): number | null {
   const m = TIMESTAMP.exec(token);
   if (!m) return null;
-  const [, h = '0', min = '0', s = '0', ms = '0'] = m;
-  return Number(h) * 3600 + Number(min) * 60 + Number(s) + Number(ms) / 1000;
+  const [, h = '0', min = '0', s = '0', frac = ''] = m;
+  return Number(h) * 3600 + Number(min) * 60 + Number(s) + (frac ? Number(`0.${frac}`) : 0);
 }
 
 export function formatTimestamp(seconds: number): string {
@@ -101,10 +109,21 @@ function cleanSettings(tokens: string[]): string {
   return kept.length ? ` ${kept.join(' ')}` : '';
 }
 
-/** A timing line `start --> end [settings]`, or null if the line isn't one. */
-function parseTiming(line: string): { start: number; end: number; settings: string } | null {
+/**
+ * A timing line, or null if the line isn't one:
+ * - WebVTT/SubRip: `start --> end [settings]`;
+ * - typed by hand: `start - end` (`0:01 - 0:03`), with nothing after it.
+ */
+export function parseTiming(line: string): { start: number; end: number; settings: string } | null {
   const arrow = line.indexOf('-->');
-  if (arrow < 0) return null;
+  if (arrow < 0) {
+    // Times never contain '-', so the first one is the separator.
+    const dash = line.indexOf('-');
+    if (dash < 0) return null;
+    const start = parseTimestamp(line.slice(0, dash).trim());
+    const end = parseTimestamp(line.slice(dash + 1).trim());
+    return start === null || end === null ? null : { start, end, settings: '' };
+  }
   const start = parseTimestamp(line.slice(0, arrow).trim());
   const rest = line
     .slice(arrow + 3)
@@ -220,7 +239,10 @@ export function parseCaptions(bytes: Uint8Array, durationS: number): Captions {
     if (timing.end <= timing.start) throw new CaptionsError('bad_timing', n);
     if (timing.start >= durationS) throw new CaptionsError('starts_after_end', n);
     const lines = block.slice(at + 1);
-    if (lines.some((l) => l.includes('-->'))) throw new CaptionsError('bad_block', n);
+    // A timing line inside the text means a blank line is missing.
+    if (lines.some((l) => l.includes('-->') || parseTiming(l) !== null)) {
+      throw new CaptionsError('bad_block', n);
+    }
     if (lines.some((l) => l.length > MAX_LINE_CHARS)) throw new CaptionsError('line_too_long', n);
     const cleaned = lines
       .slice(0, MAX_TEXT_LINES)

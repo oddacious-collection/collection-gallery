@@ -14,7 +14,7 @@ export const GET: APIRoute = async ({ params }) => {
     headers: {
       'content-type': 'text/plain; charset=utf-8',
       'content-length': String(object.size),
-      'content-disposition': `attachment; filename="captions-${id.toLowerCase()}.vtt"`,
+      'content-disposition': `attachment; filename="captions-${id.toLowerCase()}.txt"`,
     },
   });
 };

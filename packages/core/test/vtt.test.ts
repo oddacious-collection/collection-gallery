@@ -25,12 +25,21 @@ function reason(fn: () => unknown): { reason: string; cue: number | null } | 'no
 }
 
 describe('caption timestamps', () => {
-  it('reads WebVTT and SubRip times and writes WebVTT times', () => {
+  it('reads WebVTT, SubRip and hand-typed times and writes WebVTT times', () => {
     expect(parseTimestamp('00:01.500')).toBe(1.5);
     expect(parseTimestamp('01:02:03.004')).toBeCloseTo(3723.004, 6);
     expect(parseTimestamp('00:00:07,250')).toBe(7.25);
+    // Typed by hand.
+    expect(parseTimestamp('0:01')).toBe(1);
+    expect(parseTimestamp('1:02.5')).toBe(62.5);
+    expect(parseTimestamp('00:01.25')).toBe(1.25);
+    expect(parseTimestamp('0:00:07')).toBe(7);
+    // Not times.
     expect(parseTimestamp('0:61.000')).toBeNull();
-    expect(parseTimestamp('00:01.5')).toBeNull();
+    expect(parseTimestamp('61:00')).toBeNull();
+    expect(parseTimestamp('7')).toBeNull();
+    expect(parseTimestamp('0:01.5000')).toBeNull();
+    expect(parseTimestamp('0:1')).toBeNull();
     expect(formatTimestamp(83.5)).toBe('00:01:23.500');
   });
 });
@@ -113,6 +122,47 @@ describe('parseCaptions', () => {
     expect(vtt).toBe(
       'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nFirst\n\n00:00:05.000 --> 00:00:08.000\nLast\n',
     );
+  });
+
+  it('reads captions typed by hand in a .txt file', () => {
+    const txt = [
+      '0:00.5 - 0:03',
+      'Tagish Lake - C2 Ungrouped',
+      '',
+      '',
+      '0:04-0:07.5',
+      'A caption can have',
+      'two lines.',
+      '',
+    ].join('\r\n');
+    const { vtt, cues } = parseCaptions(enc(txt), 10);
+    expect(cues).toBe(2);
+    expect(vtt).toBe(
+      [
+        'WEBVTT',
+        '',
+        '00:00:00.500 --> 00:00:03.000',
+        'Tagish Lake - C2 Ungrouped',
+        '',
+        '00:00:04.000 --> 00:00:07.500',
+        'A caption can have',
+        'two lines.',
+        '',
+      ].join('\n'),
+    );
+    // Mistakes people make typing them.
+    expect(reason(() => parseCaptions(enc('0:01 - 0:03 All on one line\n'), 10))).toEqual({
+      reason: 'bad_block',
+      cue: 1,
+    });
+    expect(reason(() => parseCaptions(enc('0:01 - 0:02\na\n0:03 - 0:04\nb\n'), 10))).toEqual({
+      reason: 'bad_block',
+      cue: 1,
+    });
+    expect(reason(() => parseCaptions(enc('0:05 - 0:02\nbackwards\n'), 10))).toEqual({
+      reason: 'bad_timing',
+      cue: 1,
+    });
   });
 
   it('refuses files it cannot use, naming the caption at fault', () => {

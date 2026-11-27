@@ -1,5 +1,5 @@
 /**
- * Captions on the item editor (MED-12, D-65): pick a .vtt or .srt file for a
+ * Captions on the item editor (MED-12, D-65): pick a .txt, .vtt or .srt file for a
  * video and it is sent as-is; the server checks it and publishes a cleaned
  * WebVTT copy. Messages use textContent only (Trusted Types).
  */
@@ -22,9 +22,9 @@ function message(status: number, data: Record<string, unknown>): string {
     case 'captions_empty':
       return 'No captions were found in that file.';
     case 'captions_bad_block':
-      return `Part of the file isn’t a caption${at(data)}. Each caption needs a timing line like 00:00:01.000 --> 00:00:03.000, and a blank line between captions.`;
+      return `Part of the file isn’t a caption${at(data)}. Each caption needs a time line like 0:01 - 0:03, then its words, and an empty line between captions.`;
     case 'captions_bad_timing':
-      return `A timing line can’t be read, or ends before it starts${at(data)}. Use the form 00:00:01.000 --> 00:00:03.000.`;
+      return `A timing line can’t be read, or ends before it starts${at(data)}. Use minutes:seconds, like 0:01 - 0:03.5.`;
     case 'captions_starts_after_end':
       return `A caption starts after the video ends${at(data)}. Were these captions made for the untrimmed video?`;
     case 'captions_too_many_cues':

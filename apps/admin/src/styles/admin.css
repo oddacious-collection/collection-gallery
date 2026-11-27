@@ -661,3 +661,9 @@ p.warning {
 .captions input[type='file'] {
   max-width: 100%;
 }
+.captions-help pre {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 0.5rem;
+  overflow-x: auto;
+}

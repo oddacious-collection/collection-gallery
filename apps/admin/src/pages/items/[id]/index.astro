@@ -383,15 +383,33 @@ const REASON: Record<string, string> = {
                       : 'Captions: none.'}
                   </p>
                   <label for={`captions-${p.id}`}>
-                    {p.hasCaptions ? 'Replace captions' : 'Add captions'} (a .vtt or .srt file)
+                    {p.hasCaptions ? 'Replace captions' : 'Add captions'} (a .txt, .vtt or .srt
+                    file)
                   </label>
                   <input
                     id={`captions-${p.id}`}
                     type="file"
-                    accept=".vtt,.srt,text/vtt"
+                    accept=".txt,.vtt,.srt,text/plain,text/vtt"
                     data-captions-input
                   />
                   <p data-captions-message data-api-message role="status"></p>
+                  <details class="captions-help">
+                    <summary>How to write captions in a text file</summary>
+                    <p>
+                      In any plain-text editor (Notepad; TextEdit set to plain text), write each
+                      caption as a time line, then its words, then an empty line. Times count from
+                      the start of the video as uploaded (after trimming), in minutes:seconds, with
+                      a decimal for part of a second. Save it as a .txt file.
+                    </p>
+                    <pre>
+0:00.5 - 0:03
+This is the first caption.
+
+0:04 - 0:07.5
+A caption can have
+two lines.</pre>
+                    <p class="hint">Files from caption tools (.vtt or .srt) work as they are.</p>
+                  </details>
                   {p.hasCaptions && (
                     <div class="actions">
                       <a class="small" href={`/media/captions/${p.id}`} download>
