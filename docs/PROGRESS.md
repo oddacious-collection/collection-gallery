@@ -1,6 +1,6 @@
 # Progress
 
-## Status: M4 Video complete 2026-11-26, awaiting owner review (M1 complete 2026-11-25; M4 was built before M2, D-59). Next: SBOM and scheduled scans.
+## Status: M4 Video complete 2026-11-26, awaiting owner review (M1 complete 2026-11-25; M4 was built before M2, D-59). SBOM and scheduled scans built 2026-11-26 (D-67); next: the design milestone.
 
 ## M4 Video (complete 2026-11-26; built before M2, D-59)
 
@@ -87,8 +87,8 @@ Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 
 ### Owner requests (2026-11-25), placed by Claude: SBOM and scheduled scans right after M4 (small, and the bot builds on them); design milestone after that, before M2; the IR/appsec bot after M2, folded into M7 hardening if it fits better there
 
 - **Design milestone** (after M4, before M2): the owner sends 3–5 sites they like; Claude proposes 2–3 design directions as mockups with real items; the chosen one is built as design tokens and components (self-hosted open-licence fonts, PRV-02; dark mode; accessibility checked).
-- **SBOM**: CycloneDX from `npm sbom` on every deploy, kept as a build artifact, plus a list of non-npm parts (ZAP image, GitHub Actions, fonts).
-- **Scheduled scans**: weekly CodeQL, ZAP against staging and an OSV check of the SBOM, with a heartbeat so GitHub's 60-day pause on scheduled jobs is noticed.
+- [x] **SBOM** (D-67, 2026-11-26): CycloneDX from `npm sbom` plus every pinned Action and the ZAP image (`scripts/sbom.ts`), on every staging deploy, kept 90 days as a run artifact. Fonts join it when the design milestone adds them.
+- [x] **Scheduled scans** (D-67, 2026-11-26): weekly CodeQL, ZAP against staging (`zap-staging.yml`, also after each deploy) and an OSV scan of the lockfile (`osv-scan.yml`; reviewed exceptions with an expiry in `osv-scanner.toml`), plus a weekly heartbeat that switches every scheduled workflow back on and fails if one was paused or is overdue. How-to: `docs/runbooks/security-scans.md`.
 - **IR / appsec bot** (after the SBOM): a scheduled Claude agent reads vulnerability feeds (OSV, GitHub advisories, CISA KEV, vendor notices), checks impact against the SBOM, and opens a GitHub issue with a response plan (detect, assess, contain, eradicate, recover, post-mortem), optionally a fix PR for review. Read access plus issue creation only; feed content treated as data. Cost estimate before building.
 
 ## M1 Core gallery (complete 2026-11-25)
@@ -369,4 +369,5 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 | `prettier`, `prettier-plugin-astro` (dev)                                           | root                 | Formatting                                                                                                                                                                                           |
 | `@types/node` (dev)                                                                 | root                 | Types for build/test scripts                                                                                                                                                                         |
 | `@jsquash/webp`                                                                     | admin (browser only) | WebP encoding on the device (D-44): Safari can't encode WebP from a canvas. libwebp compiled to WASM, Apache-2.0, widely used; brings `wasm-feature-detect` (SIMD check). Never in the public bundle |
+| `google/osv-scanner-action` (GitHub Action)                                         | CI                   | Weekly dependency scan against OSV (D-67). Google's official OSV-Scanner integration, Apache-2.0, pinned by commit; Dependabot keeps the pin current                                                 |
 | `mediabunny`                                                                        | admin (browser only) | Video reading, conversion to H.264 + AAC MP4, trimming and poster frames with WebCodecs (D-61). MPL-2.0, zero dependencies, ~8 M weekly downloads.                                                   |

@@ -1,0 +1,63 @@
+# Schedule heartbeat (D-67). GitHub pauses every scheduled workflow in a public
+# repository after 60 days without activity, silently. Weekly, this:
+#   1. switches each scheduled workflow back on (a paused one is reported);
+#   2. checks each has run on schedule recently enough;
+# and fails (GitHub emails the owner) if any is paused or overdue.
+# The backups themselves run on Cloudflare (D-47) and don't depend on this;
+# these are the checks and scans around them.
+name: Schedule heartbeat
+
+on:
+  schedule:
+    - cron: '7 9 * * 1' # Mondays 09:07 UTC, after the weekly jobs
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  heartbeat:
+    name: Scheduled workflows on and running
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write # read runs, switch workflows back on
+    steps:
+      - name: Check every scheduled workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          now=$(date -u +%s)
+          problems=0
+          # workflow file, longest allowed gap between scheduled runs (days)
+          while read -r file days; do
+            state=$(gh api "repos/${REPO}/actions/workflows/${file}" --jq .state) || {
+              echo "::error::${file}: not found"; problems=$((problems + 1)); continue; }
+            if [ "${state}" != "active" ]; then
+              echo "::error::${file} was ${state}; switching it back on"
+              problems=$((problems + 1))
+            fi
+            gh api -X PUT "repos/${REPO}/actions/workflows/${file}/enable" > /dev/null || {
+              echo "::error::${file}: could not switch it on"; problems=$((problems + 1)); }
+            last=$(gh api "repos/${REPO}/actions/workflows/${file}/runs?event=schedule&per_page=1" \
+              --jq '.workflow_runs[0].created_at // ""')
+            if [ -z "${last}" ]; then
+              echo "${file}: no scheduled run yet"
+              continue
+            fi
+            age=$(( (now - $(date -u -d "${last}" +%s)) / 86400 ))
+            if [ "${age}" -gt "${days}" ]; then
+              echo "::error::${file}: last scheduled run ${age} days ago (expected within ${days})"
+              problems=$((problems + 1))
+            else
+              echo "${file}: last scheduled run ${age} days ago"
+            fi
+          done <<'LIST'
+          backup-verify.yml 8
+          codeql.yml 8
+          osv-scan.yml 8
+          zap-staging.yml 8
+          restore-drill.yml 95
+          heartbeat.yml 8
+          LIST
+          exit $(( problems > 0 ))

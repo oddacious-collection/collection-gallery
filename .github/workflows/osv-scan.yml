@@ -1,0 +1,33 @@
+# Dependency vulnerability scan (D-67): every npm package in the lockfile,
+# build tools included, checked against OSV (GitHub's advisories plus the other
+# open sources). Findings go to the Security tab (code scanning); a finding
+# fails the run, and GitHub emails the owner when a scheduled run fails.
+# Reviewed exceptions, each with a reason and an expiry: osv-scanner.toml.
+# GitHub Actions and the ZAP image are covered by Dependabot and their pins.
+name: Dependency scan (OSV)
+
+on:
+  schedule:
+    - cron: '37 6 * * 1' # Mondays 06:37 UTC
+  push:
+    branches: [main]
+    paths: [package-lock.json, osv-scanner.toml, .github/workflows/osv-scan.yml]
+  pull_request:
+    paths: [package-lock.json, osv-scanner.toml, .github/workflows/osv-scan.yml]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  osv:
+    name: OSV scan of the lockfile
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@32d3cd482bdadfb38b186c0ad1b031902d55d932 # v2.7.1
+    with:
+      runs-on: ubuntu-24.04
+      scan-args: |-
+        --config=./osv-scanner.toml
+        --lockfile=./package-lock.json

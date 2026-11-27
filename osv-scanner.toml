@@ -1,0 +1,14 @@
+# OSV-Scanner exceptions (D-67, .github/workflows/osv-scan.yml).
+#
+# Each entry is a finding that was checked and does not affect this site,
+# with the reason and an expiry date. After `ignoreUntil` the weekly scan
+# fails again, so it gets re-checked. Keep entries few and the reasons exact.
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+ignoreUntil = 2027-02-26
+reason = """esbuild <= 0.24.2: any website can read responses from esbuild's \
+development server. Only reachable through drizzle-kit (build tool that writes \
+the SQL migrations), which uses esbuild to load its config and never starts \
+that server; none of it ships to the site. Checked 2026-11-26: drizzle-kit \
+0.31.11 is the latest stable release and still depends on it."""

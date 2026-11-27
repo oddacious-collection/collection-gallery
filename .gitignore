@@ -27,3 +27,6 @@ Thumbs.db
 *.log
 .vscode/*
 !.vscode/extensions.json
+
+# Software bill of materials (scripts/sbom.ts); CI keeps it as an artifact.
+sbom.cdx.json
