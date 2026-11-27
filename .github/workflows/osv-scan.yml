@@ -48,7 +48,7 @@ jobs:
           }
           scan --format=table | tee osv.txt
           status=${PIPESTATUS[0]}
-          scan --format=sarif --output=/src/results.sarif > /dev/null
+          scan --format=sarif --output-file=/src/results.sarif > /dev/null
           echo "status=${status}" >> "${GITHUB_OUTPUT}"
           { echo '### Dependency scan (OSV)'; echo '```'; cat osv.txt; echo '```'; } >> "${GITHUB_STEP_SUMMARY}"
           if [ "${status}" -gt 1 ]; then
