@@ -56,3 +56,14 @@ export {
   type Mp4Info,
   type Mp4Reason,
 } from './mp4.ts';
+export {
+  CAPTIONS_MAX_BYTES,
+  CAPTIONS_MAX_CUES,
+  CaptionsError,
+  cleanCueText,
+  formatTimestamp,
+  parseCaptions,
+  parseTimestamp,
+  type Captions,
+  type CaptionsErrorReason,
+} from './vtt.ts';
