@@ -21,7 +21,7 @@ Every staging deploy keeps a CycloneDX SBOM with its run for 90 days: Actions â†
 
 ## A finding
 
-1. **Dependency (OSV or Dependabot):** if a fixed version exists, update it (Dependabot usually opens the PR; it waits 7 days after a release, D-58). If it doesn't affect the site, add it to `osv-scanner.toml` with the exact reason and an `ignoreUntil` date at most 3 months away, so it gets re-checked. Never ignore without a reason.
+1. **Dependency (OSV or Dependabot):** if a fixed version exists, update it (Dependabot usually opens the PR; it waits 7 days after a release, D-58). If it doesn't affect the site, add it to `osv-scanner.toml` with the exact reason and an `effectiveUntil` date at most 3 months away, so it gets re-checked. Never ignore without a reason.
 2. **CodeQL:** fix the code. Dismiss only a proven false positive, with the reason in the dismissal.
 3. **ZAP:** a new FAIL usually means a header or page change; fix it rather than loosening `.zap/rules.tsv` (INV-4).
 4. **Heartbeat:** open the named workflow in the Actions tab. If it was paused, the heartbeat has already switched it back on; run it once by hand (Run workflow) to catch up.

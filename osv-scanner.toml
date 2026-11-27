@@ -1,12 +1,12 @@
 # OSV-Scanner exceptions (D-67, .github/workflows/osv-scan.yml).
 #
 # Each entry is a finding that was checked and does not affect this site,
-# with the reason and an expiry date. After `ignoreUntil` the weekly scan
+# with the reason and an expiry date. After `effectiveUntil` the weekly scan
 # fails again, so it gets re-checked. Keep entries few and the reasons exact.
 
 [[IgnoredVulns]]
 id = "GHSA-67mh-4wv8-2f99"
-ignoreUntil = 2027-02-26
+effectiveUntil = 2027-02-26
 reason = """esbuild <= 0.24.2: any website can read responses from esbuild's \
 development server. Only reachable through drizzle-kit (build tool that writes \
 the SQL migrations), which uses esbuild to load its config and never starts \
