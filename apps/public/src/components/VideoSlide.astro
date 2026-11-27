@@ -1,0 +1,43 @@
+---
+/**
+ * One video in an item's carousel (PUB-06, D-60): its poster, linking to the
+ * full-screen view where it plays with the browser's own controls. That is
+ * all a visitor without JavaScript gets.
+ *
+ * scripts/video.ts plays it in place instead: one of a few shared players
+ * moves over the poster while it is on screen (muted autoplay, sound for the
+ * rest of the visit once turned on, captions in the player's menu).
+ */
+import type { PublicImage, PublicVideo } from '@cg/core/public';
+import { clock, mediaUrl } from '../lib/images.ts';
+import Photo from './Photo.astro';
+
+interface Props {
+  image: PublicImage;
+  video: PublicVideo;
+  href: string;
+  /** "Video 2" (the slide's place in the carousel). */
+  name: string;
+  sizes: string;
+  eager?: boolean;
+}
+const { image, video, href, name, sizes, eager = false } = Astro.props;
+const length = clock(video.durationS);
+---
+
+<div
+  class="video"
+  data-video={mediaUrl(video.key)}
+  data-captions={video.captions ? mediaUrl(video.captions) : undefined}
+  data-audio={video.hasAudio ? '1' : '0'}
+  data-label={image.alt}
+>
+  <a href={href} class="video-link">
+    <span class="visually-hidden">Play {name.toLowerCase()}:</span>
+    <Photo image={image} sizes={sizes} eager={eager} />
+    <span class="video-badge">
+      <span aria-hidden="true">▶</span>
+      {length && ` ${length}`}
+    </span>
+  </a>
+</div>

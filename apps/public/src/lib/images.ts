@@ -23,3 +23,10 @@ export function sourceFor(img: PublicImage, width: number): string {
 export function largest(img: PublicImage) {
   return img.sources[img.sources.length - 1] ?? null;
 }
+
+/** A video length as "0:20" or "1:05" (no hours: videos are ≤ 2 minutes, D-59). */
+export function clock(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds)) return '';
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}

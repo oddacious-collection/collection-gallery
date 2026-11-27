@@ -12,7 +12,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getPlatformProxy } from 'wrangler';
 import {
+  VIDEO_CHUNK_BYTES,
   beginUpload,
+  beginVideoUpload,
   createCategory,
   createItem,
   finalizeInboxUpload,
@@ -20,14 +22,18 @@ import {
   setItemCategories,
   setItemStatus,
   setItemTags,
+  setVideoCaptions,
   storeUploadPart,
+  storeVideoChunk,
   trashItem,
   updateItem,
 } from '../packages/core/src/admin/index.ts';
+import { verifyMp4Header } from '../packages/core/src/media/index.ts';
 import {
   SEED_CATEGORIES,
   SEED_ITEMS,
   SEED_MANIFEST,
+  SEED_VIDEO,
   type SeedManifest,
 } from '../tests/e2e/seed-data.ts';
 import { seedImagePath } from '../tests/e2e/fixtures/make-seed-images.ts';
@@ -111,6 +117,50 @@ try {
           else keys.variants.push(p.key);
         }
         await finalizeUpload(env.DB, env, uploadId, '', ACTOR);
+      }
+      // Videos (PUB-06): the real upload path, fixture for both the master and
+      // the public file, seed photo 0 as the poster (both are 400×300).
+      for (const v of s.videos ?? []) {
+        const clip = new Uint8Array(readFileSync(path.join(ROOT, SEED_VIDEO)));
+        const info = verifyMp4Header(clip, clip.length);
+        const { uploadId, parts } = await beginVideoUpload(env.DB, env, item.id, {
+          width: info.width,
+          height: info.height,
+          durationS: info.durationS,
+          hasAudio: info.hasAudio,
+          masterBytes: clip.length,
+          videoBytes: clip.length,
+        });
+        for (const part of parts) {
+          if (part.format === 'video/mp4') {
+            for (let n = 0; n * VIDEO_CHUNK_BYTES < clip.length; n++) {
+              const chunk = clip.slice(n * VIDEO_CHUNK_BYTES, (n + 1) * VIDEO_CHUNK_BYTES);
+              await storeVideoChunk(env.DB, env, uploadId, part.name, n, chunk);
+            }
+          } else {
+            const file = readFileSync(
+              seedImagePath(0, part.format === 'image/webp' ? 'webp' : 'jpg'),
+            );
+            await storeUploadPart(
+              env.DB,
+              env,
+              uploadId,
+              part.name,
+              new Uint8Array(file),
+              env.OWNER_NAME,
+            );
+          }
+        }
+        const row = await env.DB.prepare('SELECT parts FROM media_uploads WHERE id = ?')
+          .bind(uploadId)
+          .first<{ parts: string }>();
+        for (const p of JSON.parse(row?.parts ?? '[]') as Array<{ role: string; key: string }>) {
+          if (p.role !== 'original') keys.variants.push(p.key);
+        }
+        const { mediaId } = await finalizeUpload(env.DB, env, uploadId, v.alt ?? '', ACTOR);
+        if (v.captions) {
+          await setVideoCaptions(env.DB, env, mediaId, new TextEncoder().encode(v.captions), ACTOR);
+        }
       }
       manifest.mediaKeys[s.slug] = keys;
       await setItemCategories(

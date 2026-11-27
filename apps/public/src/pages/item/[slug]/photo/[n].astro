@@ -2,12 +2,14 @@
 /**
  * Full-screen view of one photo (D-43): the largest public size (2048 px max,
  * D-13) on a dark page, fitted to the screen; pinch to zoom on phones.
+ * A video (PUB-06) plays here with the browser's own controls: nothing
+ * loads until it is played, and captions (D-65) are in the player's menu.
  * Previous/next/close are plain links; scripts/viewer.ts adds ←/→/Esc keys.
  */
 import { env } from 'cloudflare:workers';
 import { getPublicItemDetail } from '@cg/core/public';
 import Base from '../../../../layouts/Base.astro';
-import { largest, mediaUrl, srcset } from '../../../../lib/images.ts';
+import { largest, mediaUrl, sourceFor, srcset } from '../../../../lib/images.ts';
 
 const slug = String(Astro.params['slug']);
 const n = Number.parseInt(String(Astro.params['n']), 10);
@@ -17,29 +19,48 @@ if (!item || !image) return new Response(null, { status: 404 });
 const base = `/item/${encodeURIComponent(item.slug)}`;
 const count = item.media.length;
 const big = largest(image);
+const video = image.video;
+const kind = video ? 'video' : 'photo';
 ---
 
 <Base
-  title={`${item.title}, photo ${n} of ${count}`}
+  title={`${item.title}, ${kind} ${n} of ${count}`}
   description={item.title}
   canonical={`${base}/photo/${n}`}
   bare
 >
   <h1 class="visually-hidden">
-    {item.title}, photo {n} of {count}
+    {item.title}, {kind} {n} of {count}
   </h1>
   <figure class="viewer" data-viewer>
-    <img
-      src={big ? mediaUrl(big.key) : ''}
-      srcset={srcset(image)}
-      sizes="100vw"
-      width={image.width}
-      height={image.height}
-      alt={image.alt}
-      decoding="async"
-    />
+    {video ? (
+      <video
+        controls
+        playsinline
+        preload="none"
+        poster={sourceFor(image, 1200)}
+        width={video.width}
+        height={video.height}
+        aria-label={image.alt}
+      >
+        <source src={mediaUrl(video.key)} type="video/mp4" />
+        {video.captions && (
+          <track kind="captions" srclang="en" label="English" src={mediaUrl(video.captions)} />
+        )}
+      </video>
+    ) : (
+      <img
+        src={big ? mediaUrl(big.key) : ''}
+        srcset={srcset(image)}
+        sizes="100vw"
+        width={image.width}
+        height={image.height}
+        alt={image.alt}
+        decoding="async"
+      />
+    )}
   </figure>
-  <nav class="viewer-nav" aria-label="Photo">
+  <nav class="viewer-nav" aria-label={video ? 'Video' : 'Photo'}>
     {n > 1 ? (
       <a href={`${base}/photo/${n - 1}`} rel="prev" data-viewer-prev>
         ← Previous

@@ -35,6 +35,7 @@ import {
   toFtsQuery,
 } from '../src/public/index.ts';
 import type { PlannedPart } from '../src/media/index.ts';
+import { randomKey, ulid } from '../src/ids.ts';
 import { ACTOR } from './db-helpers.ts';
 import { makeJpeg, makeWebp } from './image-fixtures.ts';
 
@@ -289,6 +290,51 @@ describe('item detail (PUB-04, PUB-15)', () => {
     await setItemStatus(env.DB, it.id, 'private', ACTOR);
     expect(await getPublicItemDetail(env.DB, it.slug)).toBeNull();
     expect(await getPublicItemDetail(env.DB, 'Not A Slug!')).toBeNull();
+  });
+
+  it('includes videos as their poster plus the file, sound and captions (PUB-06)', async () => {
+    const cat = await category(`Clips ${uid()}`);
+    const it = await item('Spinning slice', [cat.id]);
+    // A video row as the uploader leaves it (D-60), plus captions (D-65).
+    const video = async (variants: Array<[string, number]>) => {
+      const id = ulid();
+      await env.DB.prepare(
+        `INSERT INTO media (id, item_id, position, is_cover, kind, original_key, width, height,
+           duration_s, has_audio, alt_text, created_at)
+         VALUES (?, ?, 9, 0, 'video', ?, 640, 360, 20.4, 1, 'Turning slowly', ?)`,
+      )
+        .bind(id, it.id, randomKey(), new Date().toISOString())
+        .run();
+      for (const [role, width] of variants) {
+        await env.DB.prepare(
+          `INSERT INTO media_variants (key, media_id, role, width, height, format, bytes)
+           VALUES (?, ?, ?, ?, ?, 'x', 1)`,
+        )
+          .bind(randomKey(), id, role, width, width ? Math.round((width * 9) / 16) : 0)
+          .run();
+      }
+      return id;
+    };
+    await video([
+      ['poster', 400],
+      ['poster', 640],
+      ['og', 640],
+      ['video', 640],
+      ['captions', 0],
+    ]);
+    // A video missing its file is left out rather than shown as a still.
+    await video([['poster', 400]]);
+
+    const d = await getPublicItemDetail(env.DB, it.slug);
+    expect(d?.media).toHaveLength(2);
+    const [photo, clip] = d?.media ?? [];
+    expect(photo?.video).toBeNull();
+    expect(clip?.alt).toBe('Turning slowly');
+    expect(clip?.sources.map((s) => s.width)).toEqual([400, 640]);
+    expect(clip?.og).toMatchObject({ width: 640 });
+    expect(clip?.video).toMatchObject({ width: 640, height: 360, durationS: 20.4, hasAudio: true });
+    expect(clip?.video?.captions).toMatch(/^[0-9a-z]{26}$/);
+    expect(clip?.video?.key).not.toBe(clip?.video?.captions);
   });
 });
 

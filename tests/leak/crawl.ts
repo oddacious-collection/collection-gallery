@@ -51,7 +51,8 @@ const TEXT_TYPES = /^(text\/|application\/(json|xml|javascript)|image\/svg)/;
 
 function linksIn(html: string): string[] {
   const out: string[] = [];
-  const attr = /\b(?:href|src|content|action)\s*=\s*"([^"]{1,2000})"/g;
+  // data-video/data-captions: the files the video player loads (PUB-06).
+  const attr = /\b(?:href|src|content|action|data-video|data-captions)\s*=\s*"([^"]{1,2000})"/g;
   for (const m of html.matchAll(attr)) if (m[1]) out.push(m[1]);
   const srcset = /\bsrcset\s*=\s*"([^"]{1,8000})"/g;
   for (const m of html.matchAll(srcset)) {
