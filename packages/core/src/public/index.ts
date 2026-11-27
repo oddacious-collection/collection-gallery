@@ -43,6 +43,7 @@ export {
   type PublicCard,
   type PublicCategory,
   type PublicImage,
+  type PublicVideo,
   type PublicImageSource,
   type PublicItemDetail,
 } from './catalog.ts';

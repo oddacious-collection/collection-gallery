@@ -32,6 +32,9 @@ const PAGES = [
   '/item/seymchan-pallasite-slice',
   '/item/seymchan-pallasite-slice?in=meteorites',
   '/item/seymchan-pallasite-slice/photo/1',
+  // Photo and video (PUB-06), and the video's full-screen view.
+  '/item/gibeon-iron-meteorite',
+  '/item/gibeon-iron-meteorite/photo/2',
   '/search?q=olivine',
   '/search',
 ];
@@ -43,7 +46,12 @@ function expectNoSentinels(text: string, where: string): void {
 async function watchPage(page: Page) {
   const problems: string[] = [];
   page.on('request', (req) => {
-    if (!req.url().startsWith(`${PUBLIC}/`)) problems.push(`third-party: ${req.url()}`);
+    // blob: URLs of the site's own origin are made by the browser itself
+    // (WebKit draws its video controls' icons that way); no network request.
+    const url = req.url();
+    if (!url.startsWith(`${PUBLIC}/`) && !url.startsWith(`blob:${PUBLIC}/`)) {
+      problems.push(`third-party: ${url}`);
+    }
   });
   page.on('console', (m) => {
     if (m.type() === 'error' || /content security policy/i.test(m.text())) problems.push(m.text());

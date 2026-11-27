@@ -368,6 +368,74 @@ main {
   visibility: hidden;
 }
 
+/* Videos (PUB-06): the poster, then a shared player over it (scripts/video.ts). */
+.video {
+  position: relative;
+  width: 100%;
+}
+
+.video-link {
+  display: block;
+  width: 100%;
+}
+
+.video-badge {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  margin: 0;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: rgb(0 0 0 / 70%);
+  color: #fff;
+  pointer-events: none;
+}
+
+.card a {
+  position: relative;
+}
+
+.card .video-badge {
+  top: 0.5rem;
+  bottom: auto;
+}
+
+.video.has-player .video-badge {
+  display: none;
+}
+
+.video-player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--photo-bg);
+}
+
+.video-sound {
+  position: absolute;
+  left: 0.6rem;
+  top: 0.6rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.9rem;
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 999px;
+  font-size: 0.95rem;
+  background: rgb(0 0 0 / 70%);
+  color: #fff;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 40%);
+}
+
+.video-sound:hover {
+  background: rgb(0 0 0 / 85%);
+}
+
+.video-sound[hidden] {
+  display: none;
+}
+
 .carousel-count {
   position: absolute;
   right: 0.5rem;
@@ -606,7 +674,8 @@ body.bare main {
   justify-content: center;
 }
 
-.viewer img {
+.viewer img,
+.viewer video {
   max-width: 100vw;
   max-height: calc(100vh - 3.5rem);
   width: auto;

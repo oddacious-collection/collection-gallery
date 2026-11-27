@@ -13,6 +13,9 @@
  * Privacy: state lives in page memory only. No storage, no cookies (PRV-01).
  */
 
+// Videos in the carousels play in place (PUB-06).
+import './video.ts';
+
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const behavior: ScrollBehavior = reduceMotion ? 'auto' : 'smooth';
 

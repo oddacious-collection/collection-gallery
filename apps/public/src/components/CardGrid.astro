@@ -2,6 +2,7 @@
 /** A grid of item cards linking into the feed with this list as context (PUB-05). */
 import type { ListContext, PublicCard } from '@cg/core/public';
 import { itemHref } from '../lib/context.ts';
+import { clock } from '../lib/images.ts';
 import Photo from './Photo.astro';
 
 interface Props {
@@ -19,7 +20,15 @@ const SIZES = '(min-width: 70rem) 16rem, (min-width: 40rem) 30vw, 50vw';
     <li class="card">
       <a href={itemHref(card.slug, context)}>
         {card.cover ? (
-          <Photo image={card.cover} sizes={SIZES} eager={i < eagerCount} class="card-img" />
+          <>
+            <Photo image={card.cover} sizes={SIZES} eager={i < eagerCount} class="card-img" />
+            {card.cover.video && (
+              <span class="video-badge">
+                <span class="visually-hidden">Video </span>
+                <span aria-hidden="true">▶</span> {clock(card.cover.video.durationS)}
+              </span>
+            )}
+          </>
         ) : (
           <span class="card-img card-empty" aria-hidden="true" />
         )}

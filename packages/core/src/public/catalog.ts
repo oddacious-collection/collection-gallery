@@ -27,15 +27,34 @@ export interface PublicImageSource {
   height: number;
 }
 
+/** The playable part of a video (D-60, PUB-06). */
+export interface PublicVideo {
+  /** The public H.264 + AAC MP4 (≤1080p, fast start). */
+  key: string;
+  width: number;
+  height: number;
+  durationS: number | null;
+  hasAudio: boolean;
+  /** The rebuilt public WebVTT captions, if any (D-65). */
+  captions: string | null;
+}
+
+/**
+ * A photo, or a video shown through its poster: everything that shows a
+ * picture (cards, covers, link previews) uses `sources`/`og`, which for a
+ * video are its poster frame's sizes. Players also read `video`.
+ */
 export interface PublicImage {
-  /** The photo's alt text, or the item title when blank (ADM-03). */
+  /** The alt text, or the item title when blank (ADM-03). */
   alt: string;
   width: number;
   height: number;
-  /** Public WebP sizes, smallest first (MED-05). */
+  /** Public WebP sizes, smallest first (MED-05); a video's poster. */
   sources: PublicImageSource[];
   /** The 1200 px JPEG for link previews. */
   og: PublicImageSource | null;
+  /** Set for a video. */
+  video: PublicVideo | null;
 }
 
 export interface PublicCard {
@@ -178,7 +197,11 @@ async function itemRows(db: Db, ids: string[]): Promise<ItemRowLite[]> {
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-/** Public photos of the given (public) items, in order. Alt falls back to the title. */
+/**
+ * Public photos and videos of the given (public) items, in order. Alt falls
+ * back to the title. Only public variants are read (never a master), under
+ * the same visibility rule as everything else here.
+ */
 async function mediaFor(db: Db, rows: ItemRowLite[]): Promise<Map<string, PublicImage[]>> {
   const out = new Map<string, PublicImage[]>();
   if (rows.length === 0) return out;
@@ -188,21 +211,28 @@ async function mediaFor(db: Db, rows: ItemRowLite[]): Promise<Map<string, Public
     alt: string;
     width: number;
     height: number;
+    kind: string;
+    durationS: number | null;
+    hasAudio: number;
     key: string;
     role: string;
     vw: number;
     vh: number;
   }>(sql`
     SELECT m.id AS mediaId, m.item_id AS itemId, m.alt_text AS alt, m.width AS width,
-           m.height AS height, v.key AS key, v.role AS role, v.width AS vw, v.height AS vh
+           m.height AS height, m.kind AS kind, m.duration_s AS durationS,
+           m.has_audio AS hasAudio, v.key AS key, v.role AS role, v.width AS vw, v.height AS vh
     FROM media m
     JOIN media_variants v ON v.media_id = m.id
     JOIN items ON items.id = m.item_id
     WHERE m.item_id IN (${idList(rows.map((r) => r.id))})
-      AND m.deleted_at IS NULL AND m.kind = 'image' AND ${publiclyVisible}
+      AND m.deleted_at IS NULL AND ${publiclyVisible}
     ORDER BY m.item_id, m.position, m.id, v.width`);
   const title = new Map(rows.map((r) => [r.id, r.title]));
-  const images = new Map<string, PublicImage & { itemId: string }>();
+  const images = new Map<
+    string,
+    PublicImage & { itemId: string; kind: string; captions: string | null }
+  >();
   for (const v of variants) {
     let img = images.get(v.mediaId);
     if (!img) {
@@ -213,15 +243,32 @@ async function mediaFor(db: Db, rows: ItemRowLite[]): Promise<Map<string, Public
         height: v.height,
         sources: [],
         og: null,
+        video: null,
+        kind: v.kind,
+        captions: null,
       };
       images.set(v.mediaId, img);
     }
     const source = { key: v.key, width: v.vw, height: v.vh };
-    if (v.role === 'image') img.sources.push(source);
+    if (v.role === 'image' || v.role === 'poster') img.sources.push(source);
     else if (v.role === 'og') img.og = source;
+    else if (v.role === 'captions') img.captions = v.key;
+    else if (v.role === 'video') {
+      img.video = {
+        key: v.key,
+        width: v.vw,
+        height: v.vh,
+        durationS: v.durationS,
+        hasAudio: v.hasAudio === 1,
+        captions: null,
+      };
+    }
   }
-  for (const { itemId, ...img } of images.values()) {
+  for (const { itemId, kind, captions, ...img } of images.values()) {
+    // A photo needs its sizes; a video also needs its file (else it's left out).
     if (img.sources.length === 0) continue;
+    if (kind === 'video' && !img.video) continue;
+    if (img.video) img.video = { ...img.video, captions };
     const list = out.get(itemId) ?? [];
     list.push(img);
     out.set(itemId, list);

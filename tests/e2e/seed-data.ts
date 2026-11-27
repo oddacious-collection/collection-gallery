@@ -13,6 +13,11 @@ export interface SeedItem {
   description?: string;
   postedAt: string;
   photos: number[];
+  /**
+   * Videos after the photos (PUB-06): the 2 s fixture with sound
+   * (fixtures/seed-video.mp4), with an optional caption file (D-65).
+   */
+  videos?: Array<{ alt?: string; captions?: string }>;
   status: 'public' | 'private' | 'draft';
   kind?: 'owned' | 'wishlist';
   trashed?: boolean;
@@ -53,6 +58,21 @@ export const SEED_ITEMS: SeedItem[] = [
     tags: ['Iron'],
     postedAt: '2026-01-04T12:00:00.000Z',
     photos: [1],
+    videos: [
+      {
+        alt: 'Gibeon slice turning in the light',
+        // The NOTE is a private comment: the public captions must never carry it.
+        captions: [
+          'WEBVTT',
+          '',
+          'NOTE SENTINEL-CAPTION-NOTE paid 987654321',
+          '',
+          '0:00 - 0:01.5',
+          'Gibeon iron, etched',
+          '',
+        ].join('\n'),
+      },
+    ],
     status: 'public',
   },
   {
@@ -61,6 +81,7 @@ export const SEED_ITEMS: SeedItem[] = [
     categories: ['meteorites'],
     postedAt: '2026-01-03T12:00:00.000Z',
     photos: [2],
+    videos: [{ alt: 'Campo del Cielo fragment on a scale' }],
     status: 'public',
   },
   {
@@ -96,6 +117,12 @@ export const SEED_ITEMS: SeedItem[] = [
     categories: ['sentinel-hidden-category', 'meteorites'],
     postedAt: '2026-01-06T12:00:00.000Z',
     photos: [1],
+    videos: [
+      {
+        alt: 'SENTINEL-VIDEO-ALT',
+        captions: ['0:00 - 0:01', 'SENTINEL-PRIVATE-CAPTION'].join('\n'),
+      },
+    ],
     status: 'private',
   },
   {
@@ -135,3 +162,4 @@ export interface SeedManifest {
   inbox: { variants: string[]; original: string };
 }
 export const SEED_MANIFEST = '.wrangler/e2e-seed.json';
+export const SEED_VIDEO = 'tests/e2e/fixtures/seed-video.mp4';
