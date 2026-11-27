@@ -61,6 +61,9 @@ export function privateFacts(target: Target): {
     "SELECT 'hidden photo' AS kind, v.key AS v FROM media_variants v JOIN media m ON m.id = v.media_id JOIN items i ON i.id = m.item_id WHERE m.deleted_at IS NOT NULL OR NOT (i.status = 'public' AND i.kind = 'owned' AND i.deleted_at IS NULL)",
     "SELECT 'inbox photo' AS kind, json_extract(p.value, '$.key') AS v FROM inbox_photos, json_each(inbox_photos.parts) AS p",
     "SELECT 'document' AS kind, key AS v FROM documents",
+    // Import bookkeeping (M2, D-70): admin-only values, never storage keys.
+    "SELECT 'import key' AS kind, import_key AS v FROM items WHERE import_key IS NOT NULL",
+    "SELECT 'source hash' AS kind, source_hash AS v FROM media WHERE source_hash IS NOT NULL",
     "SELECT 'id' AS kind, id AS v FROM items",
     "SELECT 'id' AS kind, id AS v FROM media",
     "SELECT 'id' AS kind, id AS v FROM categories",
@@ -94,10 +97,18 @@ export function privateFacts(target: Target): {
     if (!row.v) continue;
     const n = (counts.get(row.kind) ?? 0) + 1;
     counts.set(row.kind, n);
-    const label = row.kind === 'id' ? `internal ID #${n}` : `${row.kind} key #${n}`;
+    const label =
+      row.kind === 'id'
+        ? `internal ID #${n}`
+        : row.kind.endsWith('key') || row.kind.endsWith('hash')
+          ? `${row.kind} #${n}`
+          : `${row.kind} key #${n}`;
     // IDs are upper-case ULIDs; matching them case-sensitively avoids chance hits in lower-case keys.
     forbidden.push({ label, value: row.v, caseSensitive: row.kind === 'id' });
-    if (row.kind !== 'id') must404.push({ label, path: `/media/${row.v}` });
+    // Storage keys must also 404 as media URLs; IDs and import values aren't keys.
+    if (!['id', 'import key', 'source hash'].includes(row.kind)) {
+      must404.push({ label, path: `/media/${row.v}` });
+    }
   }
   return { forbidden, must404 };
 }

@@ -83,12 +83,19 @@ export const items = sqliteTable(
     sourceCaption: text('source_caption'),
     /** D-42: JSON array of hashtag words offered as one-click tags. ADMIN. */
     suggestedTags: text('suggested_tags'),
+    /**
+     * D-70: where an imported item came from, e.g. `ig:<post timestamp>:<SHA-256
+     * of its first file as stored in the export>`. Re-running an import skips
+     * items it already made (IMP-03). NULL for items made by hand. ADMIN.
+     */
+    importKey: text('import_key'),
     createdAt: text('created_at').notNull(), // ADMIN
     updatedAt: text('updated_at').notNull(), // ADMIN
     deletedAt: text('deleted_at'), // ADMIN; set = in trash
   },
   (t) => [
     uniqueIndex('items_slug_unique').on(t.slug),
+    uniqueIndex('items_import_key_unique').on(t.importKey),
     index('items_visibility_idx').on(t.status, t.kind, t.deletedAt, t.postedAt),
     index('items_deleted_idx').on(t.deletedAt),
     check('items_kind_check', inList(t.kind, ITEM_KINDS)),
@@ -144,6 +151,12 @@ export const media = sqliteTable(
     altText: text('alt_text').notNull().default(''), // PUBLIC
     /** SHA-256 of the master, for import de-duplication (IMP-03). ADMIN. */
     contentHash: text('content_hash'),
+    /**
+     * D-70: SHA-256 of the file this media came from, as stored in an import
+     * (the master is re-encoded, so it differs). A resumed import skips files
+     * it already added. ADMIN.
+     */
+    sourceHash: text('source_hash'),
     createdAt: text('created_at').notNull(),
     deletedAt: text('deleted_at'),
   },
@@ -151,6 +164,7 @@ export const media = sqliteTable(
     uniqueIndex('media_original_key_unique').on(t.originalKey),
     index('media_item_idx').on(t.itemId, t.position),
     index('media_hash_idx').on(t.contentHash),
+    index('media_source_hash_idx').on(t.itemId, t.sourceHash),
     check('media_kind_check', inList(t.kind, MEDIA_KINDS)),
     check('media_dimensions_check', sql`${t.width} > 0 AND ${t.height} > 0`),
   ],
@@ -334,6 +348,36 @@ export const itemTags = sqliteTable(
       .references(() => tags.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.itemId, t.tagId] }), index('item_tags_tag_idx').on(t.tagId)],
+);
+
+/**
+ * Hashtag rules for imported drafts (D-62): the owner maps a hashtag once, to a
+ * category, a tag or both, and it applies to every imported draft whose
+ * original caption has it. An explicit owner choice, so D-42's "no automatic
+ * tags" stands. Kept so a later import can apply the same rules. ADMIN.
+ */
+export const hashtagRules = sqliteTable(
+  'hashtag_rules',
+  {
+    /** Lower case, without the '#'. */
+    hashtag: text('hashtag').primaryKey(),
+    categoryId: text('category_id').references(() => categories.id, { onDelete: 'cascade' }),
+    /** A tag by name: created when the rule is first applied if it doesn't exist. */
+    tagName: text('tag_name'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [
+    index('hashtag_rules_category_idx').on(t.categoryId),
+    check(
+      'hashtag_rules_target_check',
+      sql`${t.categoryId} IS NOT NULL OR ${t.tagName} IS NOT NULL`,
+    ),
+    check(
+      'hashtag_rules_hashtag_check',
+      sql`${t.hashtag} = lower(${t.hashtag}) AND length(${t.hashtag}) BETWEEN 1 AND 100`,
+    ),
+  ],
 );
 
 // ------------------------------------------------------------------- custom fields (§4.4)

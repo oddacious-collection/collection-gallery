@@ -125,6 +125,15 @@ INSERT OR IGNORE INTO inbox_photos (id, parts, width, height, content_hash, crea
    '[{"name":"original","role":"original","format":"image/jpeg","width":400,"height":300,"maxBytes":31457280,"key":"0sentkey0000000000000000e1","bytes":1},{"name":"w400","role":"image","format":"image/webp","width":400,"height":300,"maxBytes":8388608,"key":"0sentkey0000000000000000e2","bytes":1}]',
    400, 300, 'SENTINEL-SQL-INBOX-HASH', '1901-02-03T04:05:06.000Z');
 
+-- ------------------------------------------------------------------ import bookkeeping (M2, D-70)
+-- UPDATEs, not INSERTs: on staging the rows already exist (INSERT OR IGNORE
+-- above leaves them as they are), and these must be set there too. The public
+-- item carries an import key: it must never show while the item is public.
+UPDATE items SET import_key = 'ig:SENTINEL-SQL-IMPORT-KEY' WHERE id = '01SENTP0000000000000000001';
+UPDATE media SET source_hash = 'SENTINEL-SQL-SOURCE-HASH-' || id WHERE id LIKE '01SENT%';
+INSERT OR IGNORE INTO hashtag_rules (hashtag, category_id, tag_name, created_at, updated_at) VALUES
+  ('sentinelsqlhashtag', NULL, 'SENTINEL-SQL-RULE-TAG', '1901-02-03T04:05:06.000Z', '1901-02-03T04:05:06.000Z');
+
 -- ------------------------------------------------------------------ search index for the public sentinel item
 DELETE FROM search_index WHERE item_id = '01SENTP0000000000000000001';
 INSERT INTO search_index (item_id, title, body, tags, categories)
