@@ -93,6 +93,25 @@ test.describe('every public page type', () => {
   }
 });
 
+// D-68: the charcoal (dark) colours must pass the same accessibility checks,
+// contrast above all, as the slate (light) ones above.
+test.describe('every public page type in dark mode', () => {
+  test.use({ colorScheme: 'dark' });
+  for (const url of PAGES) {
+    test(`${url}: accessibility in dark mode`, async ({ page }) => {
+      await page.goto(`${PUBLIC}${url}`);
+      await page.waitForLoadState('networkidle');
+      expect(
+        await page.evaluate(() => window.matchMedia('(prefers-color-scheme: dark)').matches),
+      ).toBe(true);
+      const axe = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      expect(axe.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([]);
+    });
+  }
+});
+
 test.describe('not found (PUB-15) and redirects', () => {
   test('every non-public item, unknown item and hidden category gets the identical 404', async ({
     request,

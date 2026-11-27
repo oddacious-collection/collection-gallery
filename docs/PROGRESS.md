@@ -1,6 +1,15 @@
 # Progress
 
-## Status: M4 Video complete 2026-11-26, awaiting owner review (M1 complete 2026-11-25; M4 was built before M2, D-59). SBOM and scheduled scans built 2026-11-26 (D-67); next: the design milestone.
+## Status: M4 Video complete 2026-11-26, awaiting owner review (M1 complete 2026-11-25; M4 was built before M2, D-59). SBOM and scheduled scans done 2026-11-26 (D-67). Design milestone in progress (D-68: slate light, charcoal dark).
+
+## Design milestone (in progress; before M2, owner request)
+
+Owner decision 2026-11-26 (D-68): slate in light mode, charcoal in dark mode, following the device setting; photos carry the colour, one cool accent, a touch of bronze under titles; rounded cards, matted photos, pill buttons at least 44 px; device serif titles.
+
+1. [x] Public site restyled with the new colour, type and shape tokens (`apps/public/src/styles/global.css`); two cards per row on phones; axe checks every public page in dark mode too.
+2. [ ] Owner looks at it on staging with real photos (phone and desktop, light and dark); adjustments.
+3. [ ] Admin restyled with the same tokens (calmer, denser: it's a tool).
+4. [ ] Optional: a self-hosted serif (open licence) if the device serifs look too different across phones and computers.
 
 ## M4 Video (complete 2026-11-26; built before M2, D-59)
 
@@ -28,7 +37,7 @@ Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 
 
 - [x] Run the device test page on the iPhone and the desktop browser (step 2, done 2026-11-25).
 - [x] Exit test: a 2-minute iPhone clip, uploaded from the phone (2026-11-26).
-- [ ] Play a public video once in Firefox on the desktop.
+- [x] Play a public video once in Firefox on the desktop (owner, 2026-11-26: it worked).
 
 ### M4 review summary (2026-11-26)
 
