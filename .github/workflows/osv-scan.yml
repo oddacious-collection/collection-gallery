@@ -1,0 +1,68 @@
+# Dependency vulnerability scan (D-67): every npm package in the lockfile,
+# build tools included, checked against OSV (GitHub's advisories plus the other
+# open sources). Findings go to the Security tab (code scanning); a finding
+# fails the run, and GitHub emails the owner when a scheduled run fails.
+# Reviewed exceptions, each with a reason and an expiry: osv-scanner.toml.
+# GitHub Actions and the ZAP image are covered by Dependabot and their pins.
+#
+# OSV-Scanner runs from Google's official container image pinned by digest
+# (like ZAP), so the repository's allow-list of Actions stays as it is.
+name: Dependency scan (OSV)
+
+on:
+  schedule:
+    - cron: '37 6 * * 1' # Mondays 06:37 UTC
+  push:
+    branches: [main]
+    paths: [package-lock.json, osv-scanner.toml, .github/workflows/osv-scan.yml]
+  pull_request:
+    paths: [package-lock.json, osv-scanner.toml, .github/workflows/osv-scan.yml]
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  # google/osv-scanner v2.7.1 (released 2026-11-09).
+  OSV_IMAGE: ghcr.io/google/osv-scanner@sha256:a70ffffc2bfd33482953e5d6b64c6fcdb30239717a07b0f0d3ab2859ce3e4cde
+
+jobs:
+  osv:
+    name: OSV scan of the lockfile
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Exit codes: 0 nothing found, 1 vulnerabilities found, others an error.
+      - name: Scan package-lock.json
+        id: scan
+        run: |
+          set -uo pipefail
+          scan() {
+            docker run --rm -v "${PWD}:/src:rw" -w /src "${OSV_IMAGE}" \
+              scan source --config=/src/osv-scanner.toml --lockfile=/src/package-lock.json "$@"
+          }
+          scan --format=table | tee osv.txt
+          status=${PIPESTATUS[0]}
+          scan --format=sarif --output-file=/src/results.sarif > /dev/null
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          { echo '### Dependency scan (OSV)'; echo '```'; cat osv.txt; echo '```'; } >> "${GITHUB_STEP_SUMMARY}"
+          if [ "${status}" -gt 1 ]; then
+            echo "::error::OSV-Scanner failed (exit ${status}); no result to trust"
+            exit "${status}"
+          fi
+      - name: Findings to the Security tab
+        if: always() && hashFiles('results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results.sarif
+          category: osv-scanner
+      - name: Fail on a finding
+        if: steps.scan.outputs.status == '1'
+        run: |
+          echo "::error::Vulnerable dependencies (see the summary and the Security tab). Update them, or record a reviewed exception in osv-scanner.toml."
+          exit 1

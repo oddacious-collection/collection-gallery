@@ -5,7 +5,8 @@
 # Enabled once the owner has finished docs/runbooks/backup-setup.md (part B),
 # by setting the repository variable BACKUPS_ENABLED to "true".
 # Note: GitHub pauses scheduled workflows after 60 days without repository
-# activity; the backup Worker's cron does not depend on this (D-47).
+# activity; heartbeat.yml switches it back on weekly and reports a pause or a
+# missed run (D-67). The backup Worker's cron does not depend on this (D-47).
 name: Backup verify
 
 on:

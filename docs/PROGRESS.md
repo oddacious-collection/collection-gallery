@@ -1,8 +1,8 @@
 # Progress
 
-## Status: M4 Video — kickoff approved 2026-11-25 (M1 complete 2026-11-25; M4 is built before M2, D-59)
+## Status: M4 Video complete 2026-11-26, awaiting owner review (M1 complete 2026-11-25; M4 was built before M2, D-59). SBOM and scheduled scans built 2026-11-26 (D-67); next: the design milestone.
 
-## M4 Video (in progress; built before M2, D-59)
+## M4 Video (complete 2026-11-26; built before M2, D-59)
 
 Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 120 s with trimming, a private master plus the public file, chunked uploads, playback in every current browser (H.264 + AAC MP4), Mediabunny for video processing, and the Instagram import plan (built in M2).
 
@@ -22,18 +22,73 @@ Kickoff 2026-11-25. The owner approved D-59 to D-62: M4 before M2, videos up to 
    - [x] Step 4b: captions per video (MED-12, D-65): a .txt (typed by hand: `0:01 - 0:03`, the words, an empty line), .vtt or .srt file added, replaced, downloaded or removed in the editor; the file as uploaded stays private; the public copy is rebuilt as plain WebVTT (no comments, styles, identifiers or unknown tags; migration 0006 adds the `captions` file role). Video downloads now save as .mp4 (they were mislabelled .jpg).
 5. [x] Public player (PUB-06, D-66): videos join the item carousel as their poster ("▶ 0:20" badge) linking to the full-screen view, where the browser's own player plays them with captions (the no-JavaScript route). `scripts/video.ts` plays the video most on screen in place (muted, looping), pauses it when it leaves the screen, the tab is hidden or another starts, and respects a visitor's pause; "Sound on" carries to the next videos for the rest of the visit (page memory only); a pool of three shared players also unlocks sound on iPhone from that one tap; no autoplay with reduced motion or Save-Data (tap plays in place). Cards, covers and link previews use the poster. Tested in WebKit desktop and iPhone emulation with a 2 s seeded clip (`tests/e2e/fixtures/seed-video.mp4`, synthetic, made with the uploader): plays muted only on screen, sound carries to the next item's video, only one plays, a paused video stays paused, reduced motion, full-screen fallback. The seed adds a public video with captions (whose private NOTE must never appear) and a private video (sentinel), and the leak crawler now follows the player's `data-video`/`data-captions` files. Still to check on a real iPhone: sound carrying to the next video (step 7).
 6. [x] Tests: refusals (too long, too large, wrong type, not fast start, metadata, hidden bytes, wrong sizes: unit tests since step 3; a non-video file gets "can’t be read as a video" in the uploader); **location never stored**: a unit test refuses every place an iPhone or camera writes location (Apple `meta`/`keys`/`ilst` ISO 6709 key, `udta/©xyz`, inside tracks), and on 2026-11-26 a clip carrying Apple-format location, a title and a 2020 date went through the real uploader (built-in browser) and both stored files had none of it, no metadata boxes and a fast-start layout. CI browsers can’t run the conversion (Playwright’s WebKit on Windows has no WebCodecs, its Chromium no H.264), so the server and the uploader’s own self-check enforce it on every upload; a real iPhone clip with location on is optional (the owner keeps location off). Playback rules (TST-06) in WebKit desktop and iPhone emulation; leak suite covers video files and captions (step 5).
-7. [ ] Owner exit test on iPhone; M4 review.
+7. [x] Owner exit test on iPhone (2026-11-26: upload, muted autoplay, sound carried to the next video without another tap); M4 review below.
 
 ### Owner tasks for M4
 
 - [x] Run the device test page on the iPhone and the desktop browser (step 2, done 2026-11-25).
-- [ ] Exit test: a 2-minute iPhone clip, uploaded from the phone.
+- [x] Exit test: a 2-minute iPhone clip, uploaded from the phone (2026-11-26).
+- [ ] Play a public video once in Firefox on the desktop.
+
+### M4 review summary (2026-11-26)
+
+**Built** (steps 1 to 7 above, PRs #32 to #38):
+
+- **Uploader:** videos up to 2 minutes are converted on the owner's device to H.264 + AAC MP4. A poster and the trim are picked with a slider, and sound can be removed. Uploads go in resumable 8 MiB chunks and are checked completely by the server before anything is stored.
+- **Captions:** a `.txt`, `.vtt` or `.srt` file per video. The public copy is rebuilt, so comments never get out.
+- **Public player:** muted autoplay of the video on screen, one at a time. "Sound on" lasts for the visit, including on iPhone. The full-screen view works without JavaScript.
+- **Backups:** large files stream to Backblaze, and video masters are backed up like photo masters.
+
+**Exit criteria:** all met.
+
+| Criterion                                                   | Evidence                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A 120 s iPhone clip uploads from the phone                  | Owner exit test 2026-11-26 (staging)                                                                                                                                                                                                                                                         |
+| Plays muted; the sound preference carries to the next video | Owner exit test on iPhone 2026-11-26 (the second video played with sound without another tap); WebKit e2e tests (desktop and iPhone emulation)                                                                                                                                               |
+| Plays in Safari, Chrome, Edge, Firefox and DuckDuckGo       | One format every current browser plays (H.264 + AAC MP4, D-60). Seen playing on iPhone Safari (owner), in WebKit (e2e tests) and in Chromium (built-in browser; Chrome, Edge and DuckDuckGo on Windows use the same engine, DuckDuckGo on iPhone uses Safari's). Firefox: owner check below. |
+| No location or other metadata in any stored file            | Every stored video file passes the server's header check, which refuses any metadata box (unit tests include every place an iPhone writes location); a location-tagged clip through the real uploader came out clean (step 6)                                                                |
+| Range requests work in Safari                               | Unit tests (206 / 416 / suffix ranges); iPhone Safari playback, which needs them                                                                                                                                                                                                             |
+
+**Deviations:** D-59 to D-66 in §13:
+
+- M4 was built before M2 (D-59).
+- Videos are kept as a private master plus the public file, uploaded in chunks (D-60).
+- Mediabunny handles video in the browser (D-61).
+- The Instagram import plan is settled, for M2 (D-62).
+- The screen is kept awake on admin only (D-63).
+- AAC sound is copied unchanged, with no WebAssembly fallback (D-64). In Firefox, trimming the start of a video with sound asks to remove the sound or to use another browser.
+- Captions are rebuilt for the public site and accept hand-written `.txt` (D-65, owner request).
+- The player uses a pool of three shared players (D-66).
+
+**Found and fixed along the way:**
+
+- **Firefox:** Mediabunny's AAC fallback was blocked by our CSP (D-64).
+- **iPhone picker:** the iOS photo picker sends a shrunk copy unless Format is set to Current. The editor now warns about it.
+- **Timestamps:** Mediabunny writes the current time unless told not to.
+- **Downloads:** "Download original" saved videos as `.jpg`.
+- **Screen readers:** the video link's spoken name didn't include its visible length.
+
+**New dependency:** `mediabunny` (admin browser code only, see the table below).
+
+**Owner follow-ups:**
+
+- Review this summary.
+- Open a public video once in **Firefox on your desktop**: it should play like on the iPhone. That's the one browser in the exit criteria nobody has watched a video in yet.
+- Optional: a real iPhone clip with location turned on. Location stays off on your phone, so this is only a final confirmation.
+- Dependabot PR #30 (astro-cloudflare group) is still open.
+
+**Carried into later milestones:**
+
+- **M5:** the watermark, by re-making public videos from their masters (MED-06).
+- **M7:** moving media to its own host, which needs CORS plus `crossorigin` for the player and captions (D-66). A second caption language, if ever wanted.
+
+**Next:** SBOM and scheduled security scans (owner request), then the design milestone, then M2 Import / export.
 
 ### Owner requests (2026-11-25), placed by Claude: SBOM and scheduled scans right after M4 (small, and the bot builds on them); design milestone after that, before M2; the IR/appsec bot after M2, folded into M7 hardening if it fits better there
 
 - **Design milestone** (after M4, before M2): the owner sends 3–5 sites they like; Claude proposes 2–3 design directions as mockups with real items; the chosen one is built as design tokens and components (self-hosted open-licence fonts, PRV-02; dark mode; accessibility checked).
-- **SBOM**: CycloneDX from `npm sbom` on every deploy, kept as a build artifact, plus a list of non-npm parts (ZAP image, GitHub Actions, fonts).
-- **Scheduled scans**: weekly CodeQL, ZAP against staging and an OSV check of the SBOM, with a heartbeat so GitHub's 60-day pause on scheduled jobs is noticed.
+- [x] **SBOM** (D-67, 2026-11-26): CycloneDX from `npm sbom` plus every pinned Action and the ZAP image (`scripts/sbom.ts`), on every staging deploy, kept 90 days as a run artifact. Fonts join it when the design milestone adds them.
+- [x] **Scheduled scans** (D-67, 2026-11-26): weekly CodeQL, ZAP against staging (`zap-staging.yml`, also after each deploy) and an OSV scan of the lockfile (`osv-scan.yml`; reviewed exceptions with an expiry in `osv-scanner.toml`), plus a weekly heartbeat that switches every scheduled workflow back on and fails if one was paused or is overdue. How-to: `docs/runbooks/security-scans.md`.
 - **IR / appsec bot** (after the SBOM): a scheduled Claude agent reads vulnerability feeds (OSV, GitHub advisories, CISA KEV, vendor notices), checks impact against the SBOM, and opens a GitHub issue with a response plan (detect, assess, contain, eradicate, recover, post-mortem), optionally a fix PR for review. Read access plus issue creation only; feed content treated as data. Cost estimate before building.
 
 ## M1 Core gallery (complete 2026-11-25)
@@ -314,4 +369,5 @@ All are recorded in `docs/REQUIREMENTS.md` §13 as D-20 to D-37. The main ones:
 | `prettier`, `prettier-plugin-astro` (dev)                                           | root                 | Formatting                                                                                                                                                                                           |
 | `@types/node` (dev)                                                                 | root                 | Types for build/test scripts                                                                                                                                                                         |
 | `@jsquash/webp`                                                                     | admin (browser only) | WebP encoding on the device (D-44): Safari can't encode WebP from a canvas. libwebp compiled to WASM, Apache-2.0, widely used; brings `wasm-feature-detect` (SIMD check). Never in the public bundle |
+| `ghcr.io/google/osv-scanner` (container image)                                      | CI                   | Weekly dependency scan against OSV (D-67). Google's official OSV-Scanner, Apache-2.0, pinned by digest (v2.7.1); run like the ZAP image, so no new Action is allowed                                 |
 | `mediabunny`                                                                        | admin (browser only) | Video reading, conversion to H.264 + AAC MP4, trimming and poster frames with WebCodecs (D-61). MPL-2.0, zero dependencies, ~8 M weekly downloads.                                                   |
