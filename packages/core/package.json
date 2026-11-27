@@ -11,6 +11,7 @@
     "./admin": "./src/admin/index.ts",
     "./media": "./src/media/index.ts",
     "./backup": "./src/backup/index.ts",
+    "./import": "./src/import/plan.ts",
     "./db/schema": "./src/db/schema.ts"
   },
   "scripts": {
