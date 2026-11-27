@@ -115,6 +115,12 @@ if (process.env['CLOUDFLARE_API_TOKEN'] && process.env['CLOUDFLARE_ACCOUNT_ID'])
       target,
       `SELECT key AS k FROM documents WHERE created_at < '${cutoff}'`,
     ),
+    // Captions as uploaded (D-65); the item's updated_at moves when they change.
+    ...d1Query<{ k: string }>(
+      target,
+      `SELECT m.captions_key AS k FROM media m JOIN items i ON i.id = m.item_id
+       WHERE m.captions_key IS NOT NULL AND i.updated_at < '${cutoff}'`,
+    ),
     ...d1Query<{ k: string }>(
       target,
       `SELECT json_extract(p.value, '$.key') AS k FROM inbox_photos, json_each(inbox_photos.parts) AS p

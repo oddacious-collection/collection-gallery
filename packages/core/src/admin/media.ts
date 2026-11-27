@@ -345,6 +345,8 @@ export interface MediaView {
   kind: 'image' | 'video';
   /** Videos: length in seconds. */
   durationS: number | null;
+  /** Videos: a caption file is attached (MED-12). */
+  hasCaptions: boolean;
   /** Smallest public WebP (for thumbnails in admin; a video's poster). */
   thumbKey: string | null;
   /** Largest public WebP. */
@@ -395,6 +397,7 @@ export async function listItemMedia(
       altText: r.altText,
       kind: r.kind,
       durationS: r.durationS,
+      hasCaptions: r.captionsKey !== null,
       thumbKey: own[0]?.key ?? null,
       largeKey: own[own.length - 1]?.key ?? null,
       createdAt: r.createdAt,

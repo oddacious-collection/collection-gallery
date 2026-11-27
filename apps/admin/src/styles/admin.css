@@ -651,3 +651,13 @@ p.warning {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* Captions for a video (MED-12) */
+.captions {
+  border-top: 1px solid var(--line);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+.captions input[type='file'] {
+  max-width: 100%;
+}

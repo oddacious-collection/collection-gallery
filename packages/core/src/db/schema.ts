@@ -32,7 +32,7 @@ export const WATERMARK_OVERRIDES = ['inherit', 'on', 'off'] as const;
 export const LICENSES = ['cc-by', 'cc-by-nc', 'cc-by-nc-sa', 'cc-by-nc-nd', 'arr'] as const;
 export const MEDIA_KINDS = ['image', 'video'] as const;
 /** What a stored public file is for (MED-05; poster and video arrive in M4). */
-export const VARIANT_ROLES = ['image', 'og', 'poster', 'video'] as const;
+export const VARIANT_ROLES = ['image', 'og', 'poster', 'video', 'captions'] as const;
 export const FIELD_TYPES = [
   'text',
   'long_text',

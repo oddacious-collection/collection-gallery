@@ -187,6 +187,10 @@ try {
     })),
     ...d1Query<{ k: string }>(
       target,
+      'SELECT captions_key AS k FROM media WHERE captions_key IS NOT NULL',
+    ).map((r) => ({ k: r.k, image: false })),
+    ...d1Query<{ k: string }>(
+      target,
       `SELECT json_extract(p.value, '$.key') AS k FROM inbox_photos, json_each(inbox_photos.parts) AS p
        WHERE json_extract(p.value, '$.role') = 'original'`,
     ).map((r) => ({ k: r.k, image: true })),

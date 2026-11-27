@@ -375,6 +375,41 @@ const REASON: Record<string, string> = {
                   </button>
                 </div>
               </form>
+              {p.kind === 'video' && (
+                <div class="captions" data-captions={p.id} data-api-scope>
+                  <p class="hint">
+                    {p.hasCaptions
+                      ? 'Captions: added. Viewers can turn them on in the player.'
+                      : 'Captions: none.'}
+                  </p>
+                  <label for={`captions-${p.id}`}>
+                    {p.hasCaptions ? 'Replace captions' : 'Add captions'} (a .vtt or .srt file)
+                  </label>
+                  <input
+                    id={`captions-${p.id}`}
+                    type="file"
+                    accept=".vtt,.srt,text/vtt"
+                    data-captions-input
+                  />
+                  <p data-captions-message data-api-message role="status"></p>
+                  {p.hasCaptions && (
+                    <div class="actions">
+                      <a class="small" href={`/media/captions/${p.id}`} download>
+                        Download captions
+                      </a>
+                      <button
+                        type="button"
+                        class="small danger"
+                        data-api={`/api/media/${p.id}/captions`}
+                        data-method="DELETE"
+                        data-confirm="Remove the captions from this video? Download them first if you might want them again."
+                      >
+                        Remove captions
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <div class="actions">
                 {i > 0 && (
                   <button type="button" class="small" data-photo-move="first">
@@ -409,7 +444,7 @@ const REASON: Record<string, string> = {
                   class="small danger"
                   data-api={`/api/media/${p.id}`}
                   data-method="DELETE"
-                  data-confirm="Remove this photo? You can restore it here for 30 days."
+                  data-confirm={`Remove this ${p.kind === 'video' ? 'video' : 'photo'}? You can restore it here for 30 days.`}
                 >
                   Remove
                 </button>
@@ -576,5 +611,6 @@ const REASON: Record<string, string> = {
 <script>
   import '../../../scripts/photos/upload.ts';
   import '../../../scripts/video/upload.ts';
+  import '../../../scripts/video/captions.ts';
   import '../../../scripts/new-category.ts';
 </script>

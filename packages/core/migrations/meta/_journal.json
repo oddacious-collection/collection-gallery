@@ -43,6 +43,13 @@
       "when": 1795655753792,
       "tag": "0005_video_upload_chunks",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795752564413,
+      "tag": "0006_captions_variant",
+      "breakpoints": true
     }
   ]
 }
