@@ -11,7 +11,7 @@ Kickoff approved 2026-11-27 with the recommended answers (D-69 to D-72): import 
 ### Plan (one PR per step; each goes through CI and staging)
 
 1. [x] Kickoff docs: D-69 to D-72, this plan.
-2. [ ] Import plan file: format in the repo; content (titles with confidence, skip / maybe-skip, duplicate groups, caption edits, video durations) drafted by Claude next to the export, never in the repo; owner review.
+2. [ ] Import plan file: format in the repo (`@cg/core/import`, `packages/core/src/import/plan.ts`: matched by Instagram timestamp; import / skip / maybe-skip, title with confidence, note, duplicate group, caption edits); content (titles with confidence, skip / maybe-skip, duplicate groups, caption edits, video durations) drafted by Claude next to the export, never in the repo; owner review.
 3. [ ] Data: admin-only import key on items and source hash on media (migration), hashtag rules table; leak-suite coverage.
 4. [ ] Importer in the admin: zip and plan file read in the browser (fflate), each post a draft through the photo and video pipelines, captions cleaned and escaped, the reel's `.srt` as captions, wake lock, per-post report, resumable.
 5. [ ] Review screens: one draft at a time (Publish & next / Save & next / Skip), hashtag rules by frequency, bulk checkbox actions in the draft list.
