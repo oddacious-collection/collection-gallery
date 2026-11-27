@@ -8,7 +8,7 @@ Owner decisions 2026-11-26/27 (D-68): neutral grey in light mode with a charcoal
 
 1. [x] Public site restyled with the new colour, type and shape tokens (`apps/public/src/styles/global.css`); two cards per row on phones; axe checks every public page in dark mode too.
 2. [ ] Owner looks at it on staging with real photos (phone and desktop, light and dark); adjustments. Round 1 (2026-11-26): charcoal approved; slate replaced by sage. Round 2 (2026-11-27): sage replaced by neutral grey with the charcoal header.
-3. [ ] Admin restyled with the same tokens (calmer, denser: it's a tool).
+3. [x] Admin restyled with the same look (2026-11-27): grey/charcoal, charcoal top bar in both modes, serif page titles, rounded cards, pill buttons with a charcoal (dark: near-white) main button, white fields with a stronger outline; status colours keep their meanings. axe run by hand on the main admin screens in light and dark (the e2e admin runs behind Access, so automated admin checks need a test harness first).
 4. [ ] Optional: a self-hosted serif (open licence) if the device serifs look too different across phones and computers.
 
 ## M4 Video (complete 2026-11-26; built before M2, D-59)
