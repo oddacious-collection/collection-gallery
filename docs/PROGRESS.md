@@ -11,8 +11,8 @@ Kickoff approved 2026-11-27 with the recommended answers (D-69 to D-72): import 
 ### Plan (one PR per step; each goes through CI and staging)
 
 1. [x] Kickoff docs: D-69 to D-72, this plan.
-2. [ ] Import plan file: format in the repo (`@cg/core/import`, `packages/core/src/import/plan.ts`: matched by Instagram timestamp; import / skip / maybe-skip, title with confidence, note, duplicate group, caption edits); content (titles with confidence, skip / maybe-skip, duplicate groups, caption edits, video durations) drafted by Claude next to the export, never in the repo; owner review.
-3. [ ] Data: admin-only import key on items and source hash on media (migration), hashtag rules table; leak-suite coverage.
+2. [x] Import plan file: format in the repo (`@cg/core/import`, `packages/core/src/import/plan.ts`: matched by Instagram timestamp; import / skip / maybe-skip, title with confidence, note, duplicate group, caption edits); content drafted by Claude 2026-11-27 for all 453 posts (438 import, 13 maybe-skip, 2 skip; all 79 videos ≤ 60.2 s) and kept next to the export, never in the repo; owner reviewing the sheet.
+3. [x] Data (migration 0007, only new columns and a new table): `items.import_key` (unique; `ig:<timestamp>:<SHA-256 of the first file as stored>`), `media.source_hash`, `hashtag_rules` (hashtag → category and/or tag, lower case, dropped with its category); the leak suite forbids every import key and source hash, and its sentinels carry marker values (set by UPDATE so staging gets them too). Unit tests for the constraints.
 4. [ ] Importer in the admin: zip and plan file read in the browser (fflate), each post a draft through the photo and video pipelines, captions cleaned and escaped, the reel's `.srt` as captions, wake lock, per-post report, resumable.
 5. [ ] Review screens: one draft at a time (Publish & next / Save & next / Skip), hashtag rules by frequency, bulk checkbox actions in the draft list.
 6. [ ] CSV/JSON export and import with dry-run preview (IMP-06, D-71).

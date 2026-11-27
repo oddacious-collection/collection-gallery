@@ -317,6 +317,8 @@ export async function createItem(
     openToParting: data.openToParting,
     sourceCaption: data.sourceCaption,
     suggestedTags: data.suggestedTags ? JSON.stringify(data.suggestedTags) : null,
+    // Set only by the Instagram importer (D-70); hand-made items have none.
+    importKey: null,
     createdAt: at,
     updatedAt: at,
     deletedAt: null,
