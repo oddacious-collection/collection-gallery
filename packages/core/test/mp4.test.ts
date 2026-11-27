@@ -91,4 +91,81 @@ describe('video header check (D-60)', () => {
     swapped.set(file.subarray(moovAt, moovAt + moovSize), file.length - moovSize);
     expect(reason(() => verifyMp4Header(swapped, swapped.length))).toBe('not_fast_start');
   });
+
+  it('refuses every place an iPhone or camera puts the location (M4 step 6)', async () => {
+    const LOCATION = '+37.7749-122.4194+010.000/';
+    // A box: 32-bit size, 4-byte type (latin-1, so "©xyz" is A9 78 79 7A), payload.
+    const box = (type: string, ...parts: Uint8Array[]): Uint8Array => {
+      const body = parts.reduce((n, p) => n + p.length, 0);
+      const out = new Uint8Array(8 + body);
+      new DataView(out.buffer).setUint32(0, out.length);
+      for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i) & 0xff;
+      let at = 8;
+      for (const p of parts) {
+        out.set(p, at);
+        at += p.length;
+      }
+      return out;
+    };
+    const text = (s: string) => new TextEncoder().encode(s);
+    const zeros = (n: number) => new Uint8Array(n);
+    /** Appends `child` inside the box at `path` (e.g. ['moov', 'trak']), growing each parent. */
+    const insert = (file: Uint8Array, path: string[], child: Uint8Array): Uint8Array => {
+      const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
+      const parents: number[] = [];
+      let from = 0;
+      let to = file.length;
+      for (const type of path) {
+        let at = from;
+        while (at < to && String.fromCharCode(...file.subarray(at + 4, at + 8)) !== type) {
+          at += view.getUint32(at);
+        }
+        if (at >= to) throw new Error(`no ${type}`);
+        parents.push(at);
+        from = at + 8;
+        to = at + view.getUint32(at);
+      }
+      const out = new Uint8Array(file.length + child.length);
+      out.set(file.subarray(0, to));
+      out.set(child, to);
+      out.set(file.subarray(to), to + child.length);
+      const outView = new DataView(out.buffer);
+      for (const p of parents) outView.setUint32(p, view.getUint32(p) + child.length);
+      return out;
+    };
+
+    // Apple's QuickTime metadata: moov/meta with an mdta handler, a keys
+    // table naming com.apple.quicktime.location.ISO6709, and its value in ilst.
+    const keyName = text('com.apple.quicktime.location.ISO6709');
+    const keyEntry = new Uint8Array(8 + keyName.length);
+    new DataView(keyEntry.buffer).setUint32(0, keyEntry.length);
+    keyEntry.set(text('mdta'), 4);
+    keyEntry.set(keyName, 8);
+    const keysCount = zeros(8);
+    new DataView(keysCount.buffer).setUint32(4, 1);
+    const appleMeta = box(
+      'meta',
+      zeros(4),
+      box('hdlr', zeros(8), text('mdta'), zeros(13)),
+      box('keys', keysCount, keyEntry),
+      box('ilst', box('\u0000\u0000\u0000\u0001', box('data', zeros(8), text(LOCATION)))),
+    );
+    // The older QuickTime place: moov/udta/©xyz.
+    const xyz = box('udta', box('©xyz', zeros(4), text(LOCATION)));
+
+    const file = await makeMp4({ seconds: 2 });
+    for (const [where, tampered] of [
+      ['moov/meta', insert(file, ['moov'], appleMeta)],
+      ['moov/udta/©xyz', insert(file, ['moov'], xyz)],
+      ['moov/trak/udta/©xyz', insert(file, ['moov', 'trak'], xyz)],
+      ['moov/trak/mdia/meta', insert(file, ['moov', 'trak', 'mdia'], appleMeta)],
+    ] as const) {
+      expect(
+        reason(() => verifyMp4Header(tampered, tampered.length)),
+        where,
+      ).toBe('has_metadata');
+    }
+    // A clean file passes the same helper untouched (the test isn't refusing everything).
+    expect(reason(() => verifyMp4Header(file, file.length))).toBe('ok');
+  });
 });
