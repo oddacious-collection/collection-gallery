@@ -89,6 +89,12 @@ export const items = sqliteTable(
      * items it already made (IMP-03). NULL for items made by hand. ADMIN.
      */
     importKey: text('import_key'),
+    /**
+     * D-70: the import plan's review flags for an imported draft (JSON: action,
+     * title confidence, note, duplicate group, mentions removed). Shown in the
+     * review queue; never public. ADMIN.
+     */
+    importReview: text('import_review'),
     createdAt: text('created_at').notNull(), // ADMIN
     updatedAt: text('updated_at').notNull(), // ADMIN
     deletedAt: text('deleted_at'), // ADMIN; set = in trash

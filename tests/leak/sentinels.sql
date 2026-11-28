@@ -129,7 +129,9 @@ INSERT OR IGNORE INTO inbox_photos (id, parts, width, height, content_hash, crea
 -- UPDATEs, not INSERTs: on staging the rows already exist (INSERT OR IGNORE
 -- above leaves them as they are), and these must be set there too. The public
 -- item carries an import key: it must never show while the item is public.
-UPDATE items SET import_key = 'ig:SENTINEL-SQL-IMPORT-KEY' WHERE id = '01SENTP0000000000000000001';
+UPDATE items SET import_key = 'ig:SENTINEL-SQL-IMPORT-KEY',
+  import_review = '{"action":"import","titleConfidence":"low","note":"SENTINEL-SQL-IMPORT-NOTE","mentionsRemoved":0}'
+WHERE id = '01SENTP0000000000000000001';
 UPDATE media SET source_hash = 'SENTINEL-SQL-SOURCE-HASH-' || id WHERE id LIKE '01SENT%';
 INSERT OR IGNORE INTO hashtag_rules (hashtag, category_id, tag_name, created_at, updated_at) VALUES
   ('sentinelsqlhashtag', NULL, 'SENTINEL-SQL-RULE-TAG', '1901-02-03T04:05:06.000Z', '1901-02-03T04:05:06.000Z');

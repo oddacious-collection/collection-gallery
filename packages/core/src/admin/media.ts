@@ -280,6 +280,8 @@ export async function finalizeUpload(
   altText: string,
   actor: string,
   now: Date = new Date(),
+  /** The importer's SHA-256 of the file this came from (D-70). */
+  opts: { sourceHash?: string } = {},
 ): Promise<{ mediaId: string }> {
   const db = drizzle(d1);
   const alt = AltText.parse(altText);
@@ -288,7 +290,7 @@ export async function finalizeUpload(
   const itemId = upload.itemId;
   const at = now.toISOString();
   if (upload.parts.some((p) => p.format === 'video/mp4')) {
-    return finalizeVideo(db, buckets, uploadId, itemId, upload.parts, alt, actor, at);
+    return finalizeVideo(db, buckets, uploadId, itemId, upload.parts, alt, actor, at, opts);
   }
   const change = await itemMediaChange(db, itemId, at);
   if (change.item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
@@ -309,6 +311,7 @@ export async function finalizeUpload(
       height: original.part.height,
       altText: alt,
       contentHash: original.head.customMetadata?.['sha256'] ?? null,
+      sourceHash: opts.sourceHash ?? null,
       createdAt: at,
     }),
     ...heads
@@ -1263,6 +1266,7 @@ async function finalizeVideo(
   alt: string,
   actor: string,
   at: string,
+  opts: { sourceHash?: string } = {},
 ): Promise<{ mediaId: string }> {
   const change = await itemMediaChange(db, itemId, at);
   if (change.item.deletedAt !== null) throw new DomainError('conflict', { reasons: ['in_trash'] });
@@ -1290,6 +1294,7 @@ async function finalizeVideo(
       hasAudio: master.hasAudio ?? false,
       altText: alt,
       contentHash: null,
+      sourceHash: opts.sourceHash ?? null,
       createdAt: at,
     }),
     ...heads

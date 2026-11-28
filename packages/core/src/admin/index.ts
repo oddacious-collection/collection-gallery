@@ -22,6 +22,7 @@ export * from './categories.ts';
 export * from './purge.ts';
 export * from './media.ts';
 export * from './captions.ts';
+export * from './import.ts';
 export { api, json, readJson, MAX_JSON_BYTES } from './http.ts';
 export { DomainError, type DomainErrorCode } from './domain-error.ts';
 export {

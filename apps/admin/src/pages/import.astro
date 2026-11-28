@@ -1,0 +1,69 @@
+---
+/**
+ * Import from Instagram (IMP-01 to 05, D-62, D-70). Everything happens in
+ * this browser: the export zip and the import plan are read here, each post
+ * becomes a draft, and its photos and videos go through the same pipelines
+ * as a normal upload (all metadata stripped). Safe to stop and run again:
+ * nothing is ever imported twice.
+ */
+import Admin from '../layouts/Admin.astro';
+---
+
+<Admin title="Import from Instagram · Admin">
+  <h1>Import from Instagram</h1>
+
+  <section class="card import" data-import aria-labelledby="import-files-h">
+    <h2 id="import-files-h">1. Choose the files</h2>
+    <p class="hint">
+      Use a computer: about 450 posts take roughly an hour. Keep this tab open; the screen stays
+      awake. Stopping is safe, and running it again picks up where it left off.
+    </p>
+    <label for="import-zip">Instagram export (the .zip from Meta, JSON format)</label>
+    <input id="import-zip" type="file" accept=".zip,application/zip" data-import-zip />
+    <label for="import-plan">Import plan (import-plan.json)</label>
+    <input id="import-plan" type="file" accept=".json,application/json" data-import-plan />
+    <p class="hint">
+      Without a plan, titles are made from the first words of each caption and nothing is skipped.
+    </p>
+    <label for="import-limit">Only the first posts, for a trial (leave blank for all)</label>
+    <input
+      id="import-limit"
+      type="number"
+      min="1"
+      max="100000"
+      inputmode="numeric"
+      data-import-limit
+    />
+    <div class="actions">
+      <button type="button" data-import-check>
+        Check the export
+      </button>
+    </div>
+    <p data-import-message role="status"></p>
+  </section>
+
+  <section class="card" data-import-summary hidden aria-labelledby="import-summary-h">
+    <h2 id="import-summary-h">2. What will happen</h2>
+    <ul data-import-facts></ul>
+    <div class="actions">
+      <button type="button" class="primary" data-import-start>
+        Start the import
+      </button>
+      <button type="button" data-import-stop hidden>
+        Stop after this file
+      </button>
+    </div>
+    <progress data-import-progress max="1" value="0" hidden></progress>
+    <p data-import-now role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" data-import-report-card hidden aria-labelledby="import-report-h">
+    <h2 id="import-report-h">3. Report</h2>
+    <p data-import-totals></p>
+    <ol class="import-report" data-import-report></ol>
+  </section>
+</Admin>
+
+<script>
+  import '../scripts/import/page.ts';
+</script>
