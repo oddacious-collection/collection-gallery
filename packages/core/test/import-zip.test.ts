@@ -5,6 +5,11 @@ import { ZipError, bytesSource, crc32, readZipDirectory, readZipEntry } from '..
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
+function must<T>(x: T | undefined): T {
+  if (x === undefined) throw new Error('missing');
+  return x;
+}
+
 function reason(e: unknown): string {
   return e instanceof ZipError ? e.reason : String(e);
 }
@@ -118,9 +123,9 @@ describe('zip reader', () => {
     const [json, stored, deflated] = entries;
     expect(stored?.method).toBe(0);
     expect(deflated?.method).toBe(8);
-    expect(new TextDecoder().decode(await readZipEntry(src, json!))).toBe('[{"media":[]}]');
-    expect(await readZipEntry(src, stored!)).toEqual(big);
-    expect(await readZipEntry(src, deflated!)).toEqual(big);
+    expect(new TextDecoder().decode(await readZipEntry(src, must(json)))).toBe('[{"media":[]}]');
+    expect(await readZipEntry(src, must(stored))).toEqual(big);
+    expect(await readZipEntry(src, must(deflated))).toEqual(big);
   });
 
   it('reads ZIP64 archives (exports over 4 GB)', async () => {
@@ -128,7 +133,7 @@ describe('zip reader', () => {
     const src = bytesSource(zip64('media/posts/big.mp4', data));
     const [entry] = await readZipDirectory(src);
     expect(entry).toMatchObject({ name: 'media/posts/big.mp4', size: data.length });
-    expect(await readZipEntry(src, entry!)).toEqual(data);
+    expect(await readZipEntry(src, must(entry))).toEqual(data);
   });
 
   it('refuses non-zips, damaged data and unsupported entries', async () => {
@@ -140,14 +145,15 @@ describe('zip reader', () => {
     const [entry] = await readZipDirectory(src);
     // Flip a byte of the file's data: the CRC catches it.
     const broken = zip.slice();
-    broken[30 + 'a.txt'.length + 2] ^= 0xff;
-    await expect(readZipEntry(bytesSource(broken), entry!)).rejects.toSatisfy(
+    const at = 30 + 'a.txt'.length + 2;
+    broken[at] = (broken[at] ?? 0) ^ 0xff;
+    await expect(readZipEntry(bytesSource(broken), must(entry))).rejects.toSatisfy(
       (e) => reason(e) === 'checksum',
     );
-    await expect(readZipEntry(src, { ...entry!, encrypted: true })).rejects.toSatisfy(
+    await expect(readZipEntry(src, { ...must(entry), encrypted: true })).rejects.toSatisfy(
       (e) => reason(e) === 'encrypted',
     );
-    await expect(readZipEntry(src, { ...entry!, method: 12 })).rejects.toSatisfy(
+    await expect(readZipEntry(src, { ...must(entry), method: 12 })).rejects.toSatisfy(
       (e) => reason(e) === 'unsupported_method',
     );
   });

@@ -34,7 +34,7 @@ export function fixMojibake(s: string): string {
   if (![...s].some((c) => (c.codePointAt(0) ?? 0) >= 0x80)) return s;
   const bytes = Uint8Array.from([...s].map((c) => c.codePointAt(0) ?? 0));
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes);
   } catch {
     return s;
   }
