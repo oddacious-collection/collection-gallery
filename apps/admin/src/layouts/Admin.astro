@@ -1,7 +1,7 @@
 ---
 import '../styles/admin.css';
 import { env } from 'cloudflare:workers';
-import { countInbox } from '@cg/core/admin';
+import { countInbox, countReviewQueue } from '@cg/core/admin';
 
 interface Props {
   title: string;
@@ -9,7 +9,7 @@ interface Props {
 const { title } = Astro.props;
 const path = Astro.url.pathname;
 const view = Astro.url.searchParams.get('view');
-const inbox = await countInbox(env.DB);
+const [inbox, toReview] = await Promise.all([countInbox(env.DB), countReviewQueue(env.DB)]);
 const nav = [
   { href: '/items', label: 'Items', current: path === '/items' && view !== 'trash' },
   { href: '/items/new', label: 'New item', current: path === '/items/new' },
@@ -20,6 +20,15 @@ const nav = [
   },
   { href: '/categories', label: 'Categories', current: path === '/categories' },
   { href: '/import', label: 'Import', current: path === '/import' },
+  ...(toReview > 0 || path.startsWith('/review')
+    ? [
+        {
+          href: '/review',
+          label: toReview > 0 ? `Review (${toReview})` : 'Review',
+          current: path.startsWith('/review'),
+        },
+      ]
+    : []),
   { href: '/items?view=trash', label: 'Trash', current: path === '/items' && view === 'trash' },
 ];
 ---

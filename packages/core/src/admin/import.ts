@@ -37,6 +37,8 @@ export const ImportReview = z.strictObject({
   mentionsRemoved: z.int().min(0).max(1000),
   /** The plan had no entry for this post (title made from the caption). */
   notInPlan: z.boolean().optional(),
+  /** Set by the review queue (json_set writes 1) once the owner has dealt with it. */
+  reviewed: z.union([z.literal(1), z.literal(true)]).optional(),
 });
 export type ImportReview = z.infer<typeof ImportReview>;
 

@@ -17,7 +17,7 @@ export async function run(db: Db, ops: Op[]): Promise<void> {
 /** An audit-log insert for one admin mutation. */
 export function audit(
   db: Db,
-  targetType: 'item' | 'category' | 'media' | 'settings',
+  targetType: 'item' | 'category' | 'media' | 'settings' | 'hashtag_rule',
   actor: string,
   action: string,
   targetId: string,
