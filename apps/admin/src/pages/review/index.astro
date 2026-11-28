@@ -1,0 +1,203 @@
+---
+/**
+ * Review imported drafts, one at a time (IMP-04; D-62 (7)): the plan's flags,
+ * the photos, title, caption, categories and tags (hashtag suggestions one
+ * click away), then Publish & next / Save & next / Skip / Not an item. The
+ * "Needs a look" view shows what the plan or the importer flagged; "Repeats"
+ * the same object posted more than once (keep one).
+ */
+import { env } from 'cloudflare:workers';
+import {
+  QUEUE_FILTERS,
+  getItem,
+  listCategoryTree,
+  listItemMedia,
+  repeatSiblings,
+  reviewFlags,
+  reviewQueue,
+  type CategoryNode,
+  type QueueFilter,
+} from '@cg/core/admin';
+import CategoryChecks from '../../components/CategoryChecks.astro';
+import Admin from '../../layouts/Admin.astro';
+
+const requested = Astro.url.searchParams.get('filter') ?? 'all';
+const filter: QueueFilter = (QUEUE_FILTERS as readonly string[]).includes(requested)
+  ? (requested as QueueFilter)
+  : 'all';
+const after = Astro.url.searchParams.get('after') ?? undefined;
+const queue = await reviewQueue(env.DB, filter, after);
+const id = queue.nextId;
+
+const item = id ? await getItem(env.DB, id) : null;
+const [flags, photos, tree] = await Promise.all([
+  id ? reviewFlags(env.DB, id) : Promise.resolve(null),
+  id ? listItemMedia(env.DB, id) : Promise.resolve({ active: [], removed: [] }),
+  listCategoryTree(env.DB),
+]);
+const siblings =
+  id && flags?.duplicateGroup ? await repeatSiblings(env.DB, id, flags.duplicateGroup) : [];
+const byParent = new Map<string | null, CategoryNode[]>();
+for (const node of tree) {
+  const list = byParent.get(node.parentId) ?? [];
+  list.push(node);
+  byParent.set(node.parentId, list);
+}
+const selected = new Set(item?.categoryIds ?? []);
+const suggestions: string[] = item?.suggestedTags
+  ? (JSON.parse(item.suggestedTags) as string[]).filter(
+      (s) => !item.tagNames.some((t) => t.toLowerCase() === s.toLowerCase()),
+    )
+  : [];
+const labels: Record<QueueFilter, string> = {
+  all: 'Everything',
+  flagged: 'Needs a look',
+  repeats: 'Repeats',
+};
+const confidence = { high: 'Title: sure', medium: 'Title: check it', low: 'Title: guessed' };
+const fit = (p: { width: number; height: number }, box: number) =>
+  p.width >= p.height
+    ? { width: box, height: Math.max(1, Math.round((box * p.height) / p.width)) }
+    : { width: Math.max(1, Math.round((box * p.width) / p.height)), height: box };
+const qs = (f: QueueFilter) => (f === 'all' ? '/review' : `/review?filter=${f}`);
+---
+
+<Admin title="Review imported drafts · Admin">
+  <h1>Review imported drafts</h1>
+  <nav class="filters" aria-label="Which drafts">
+    {QUEUE_FILTERS.map((f) => (
+      <a href={qs(f)} aria-current={f === filter ? 'page' : undefined}>
+        {labels[f]} ({queue.counts[f]})
+      </a>
+    ))}
+    <a href="/review/hashtags">Hashtag rules</a>
+  </nav>
+
+  {!item ? (
+    <section class="card">
+      {queue.counts[filter] === 0 ? (
+        <p>
+          Nothing left to review here.{' '}
+          {filter !== 'all' && queue.counts.all > 0 && (
+            <a href="/review">{queue.counts.all} more in Everything.</a>
+          )}
+        </p>
+      ) : (
+        <p>
+          You've reached the end; {queue.counts[filter]} skipped{' '}
+          {queue.counts[filter] === 1 ? 'draft is' : 'drafts are'} still waiting.{' '}
+          <a href={qs(filter)}>Start again from the newest</a>.
+        </p>
+      )}
+      <p class="hint">
+        Drafts you saved without publishing are in <a href="/items?view=draft">Items → Drafts</a>.
+      </p>
+    </section>
+  ) : (
+    <>
+      {flags && (
+        <section class="card review-flags" aria-label="Notes from the import">
+          <p class="badges">
+            {flags.action === 'maybe-skip' && <span class="badge private">Maybe not an item</span>}
+            <span class={`badge ${flags.titleConfidence === 'high' ? 'public' : 'draft'}`}>
+              {confidence[flags.titleConfidence]}
+            </span>
+            {flags.notInPlan && <span class="badge draft">Title made from the caption</span>}
+            {flags.mentionsRemoved > 0 && (
+              <span class="badge draft">
+                {flags.mentionsRemoved === 1
+                  ? 'An @handle was removed: reread the caption'
+                  : `${flags.mentionsRemoved} @handles were removed: reread the caption`}
+              </span>
+            )}
+          </p>
+          {flags.note && <p>{flags.note}</p>}
+          {siblings.length > 0 && (
+            <div>
+              <p>The same object, posted again (keep one, move the others to the trash):</p>
+              <ul>
+                {siblings.map((s) => (
+                  <li>
+                    <a href={`/items/${s.id}`}>{s.title}</a>{' '}
+                    <span class="hint">
+                      {s.trashed ? '(in the trash)' : s.status === 'public' ? '(published)' : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      <form class="card review" data-review={item.id} data-filter={filter}>
+        <div class="review-photos">
+          {photos.active.map((p) =>
+            p.thumbKey ? (
+              <img src={`/media/${p.thumbKey}`} {...fit(p, 160)} alt={p.altText || item.title} />
+            ) : null,
+          )}
+          {photos.active.length === 0 && <p class="muted">No photos came through for this post.</p>}
+        </div>
+        <p class="hint">
+          Posted {item.postedAt?.slice(0, 10)}.{' '}
+          <a href={`/items/${item.id}`}>Open in the full editor</a> (photos, alt text, details).
+        </p>
+
+        <label for="review-title">Title</label>
+        <input id="review-title" name="title" type="text" maxlength="200" value={item.title} />
+        <label for="review-description">Caption (the public description)</label>
+        <textarea id="review-description" name="description" rows="8">{item.description}</textarea>
+
+        <fieldset class="review-categories">
+          <legend>Categories</legend>
+          {tree.length === 0 ? (
+            <p class="muted">
+              No categories yet. <a href="/categories">Create some first</a>.
+            </p>
+          ) : (
+            <CategoryChecks byParent={byParent} parentId={null} selected={selected} />
+          )}
+        </fieldset>
+
+        <label for="review-tags">Tags, separated by commas</label>
+        <input id="review-tags" name="tags" type="text" value={item.tagNames.join(', ')} />
+        {suggestions.length > 0 && (
+          <>
+            <p class="hint">Hashtags from the post (private; click to add):</p>
+            <div class="suggestions">
+              {suggestions.map((s) => (
+                <button type="button" class="small" data-review-tag={s}>
+                  + {s}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <p data-review-message role="status"></p>
+        <div class="actions">
+          <button type="button" class="primary" data-then="publish">
+            Publish &amp; next
+          </button>
+          <button type="button" data-then="save">
+            Save &amp; next
+          </button>
+          <a
+            class="button-link"
+            href={`${qs(filter)}${filter === 'all' ? '?' : '&'}after=${item.id}`}
+          >
+            Skip
+          </a>
+          <button type="button" class="danger" data-then="trash">
+            Not an item: move to trash
+          </button>
+        </div>
+      </form>
+    </>
+  )}
+</Admin>
+
+<script>
+  import '../../scripts/review.ts';
+</script>

@@ -1,0 +1,112 @@
+---
+/**
+ * Hashtag rules (D-62 (3)): every hashtag from the imported posts, most used
+ * first, with the rule set for it. Map a hashtag to a category and/or a tag
+ * once; "Apply the rules" adds them to every imported draft with that
+ * hashtag. An explicit choice, so nothing becomes a tag on its own (D-42).
+ */
+import { env } from 'cloudflare:workers';
+import { hashtagOverview, listCategoryTree } from '@cg/core/admin';
+import Admin from '../../layouts/Admin.astro';
+
+const PAGE = 100;
+const q = (Astro.url.searchParams.get('q') ?? '').slice(0, 50);
+const page = Math.max(1, Number.parseInt(Astro.url.searchParams.get('page') ?? '1', 10) || 1);
+const [{ rows, total }, tree] = await Promise.all([
+  hashtagOverview(env.DB, { q, limit: PAGE, offset: (page - 1) * PAGE }),
+  listCategoryTree(env.DB),
+]);
+const pages = Math.max(1, Math.ceil(total / PAGE));
+const link = (p: number) =>
+  `/review/hashtags?${new URLSearchParams({ ...(q ? { q } : {}), page: String(p) })}`;
+---
+
+<Admin title="Hashtag rules · Admin">
+  <h1>Hashtag rules</h1>
+  <nav class="filters" aria-label="Review">
+    <a href="/review">Back to the review</a>
+  </nav>
+  <section class="card">
+    <p>
+      Pick a category, a tag or both for a hashtag, then <strong>Apply the rules</strong>: every
+      imported draft whose original post used that hashtag gets them. Nothing is removed, and
+      published items aren't changed.
+    </p>
+    <div class="actions">
+      <button type="button" class="primary" data-apply-rules>
+        Apply the rules to drafts
+      </button>
+    </div>
+    <p data-apply-message role="status"></p>
+  </section>
+
+  <form class="card filters-form" method="get" action="/review/hashtags">
+    <label for="hashtag-q">Find a hashtag</label>
+    <div class="row">
+      <input id="hashtag-q" name="q" type="text" value={q} placeholder="meteorite" />
+      <div class="actions">
+        <button type="submit">Find</button>
+      </div>
+    </div>
+  </form>
+
+  <p class="hint">
+    {total} hashtag{total === 1 ? '' : 's'}
+    {q && ` starting with “${q}”`}; page {page} of {pages}.
+  </p>
+  <ul class="hashtag-rules">
+    {rows.map((r) => (
+      <li>
+        <form
+          class="hashtag-rule"
+          data-api="/api/hashtag-rules"
+          data-method="PUT"
+          data-then="none"
+          data-label={`#${r.hashtag}`}
+        >
+          <input type="hidden" name="hashtag" value={r.hashtag} />
+          <span class="hashtag-name">
+            #{r.hashtag} <span class="hint">({r.items})</span>
+          </span>
+          <label class="visually-hidden" for={`cat-${r.hashtag}`}>
+            Category for #{r.hashtag}
+          </label>
+          <select id={`cat-${r.hashtag}`} name="categoryId" data-type="nullable">
+            <option value="">No category</option>
+            {tree.map((c) => (
+              <option value={c.id} selected={c.id === r.categoryId}>
+                {`${'– '.repeat(c.depth)}${c.name}`}
+              </option>
+            ))}
+          </select>
+          <label class="visually-hidden" for={`tag-${r.hashtag}`}>
+            Tag for #{r.hashtag}
+          </label>
+          <input
+            id={`tag-${r.hashtag}`}
+            name="tagName"
+            type="text"
+            maxlength="50"
+            data-type="nullable"
+            value={r.tagName ?? ''}
+            placeholder="No tag"
+          />
+          <button type="submit" class="small">
+            Save
+          </button>
+          <p data-api-message role="status"></p>
+        </form>
+      </li>
+    ))}
+  </ul>
+  {pages > 1 && (
+    <nav class="filters" aria-label="Pages">
+      {page > 1 && <a href={link(page - 1)}>← Previous</a>}
+      {page < pages && <a href={link(page + 1)}>Next →</a>}
+    </nav>
+  )}
+</Admin>
+
+<script>
+  import '../../scripts/hashtag-rules.ts';
+</script>

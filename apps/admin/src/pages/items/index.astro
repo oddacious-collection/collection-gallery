@@ -1,9 +1,12 @@
 ---
 import { env } from 'cloudflare:workers';
 import {
+  BULK_MAX,
   DomainError,
+  countReviewQueue,
   coverThumbKeys,
   getItem,
+  listCategoryTree,
   listItems,
   type ListItemsOptions,
 } from '@cg/core/admin';
@@ -15,12 +18,25 @@ type View = (typeof VIEWS)[number];
 const requested = Astro.url.searchParams.get('view') ?? 'all';
 const view: View = (VIEWS as readonly string[]).includes(requested) ? (requested as View) : 'all';
 
-const opts: ListItemsOptions = { limit: 200 };
+const PAGE = 100;
+const page = Math.max(1, Number.parseInt(Astro.url.searchParams.get('page') ?? '1', 10) || 1);
+const opts: ListItemsOptions = { limit: PAGE + 1, offset: (page - 1) * PAGE };
 if (view === 'trash') opts.trashed = true;
 else if (view === 'wishlist') opts.kind = 'wishlist';
 else if (view !== 'all') opts.status = view;
 
-const rows = await listItems(env.DB, opts);
+const found = await listItems(env.DB, opts);
+const hasNext = found.length > PAGE;
+const rows = found.slice(0, PAGE);
+const [tree, toReview] = await Promise.all([listCategoryTree(env.DB), countReviewQueue(env.DB)]);
+const pageLink = (n: number) => {
+  const u = new URLSearchParams(Astro.url.searchParams);
+  if (n > 1) u.set('page', String(n));
+  else u.delete('page');
+  const qs = u.toString();
+  return qs ? `/items?${qs}` : '/items';
+};
+const bulk = view !== 'trash';
 const thumbs = await coverThumbKeys(
   env.DB,
   rows.map((r) => r.id),
@@ -68,6 +84,12 @@ const labels: Record<View, string> = {
       </a>
     ))}
   </nav>
+  {toReview > 0 && view !== 'trash' && (
+    <p class="message ok-banner">
+      {toReview} imported draft{toReview === 1 ? '' : 's'} to review.{' '}
+      <a href="/review">Review them one at a time</a>.
+    </p>
+  )}
   {view === 'trash' && (
     <p class="hint">
       Items in the trash are hidden everywhere. They're deleted for good after 30 days.
@@ -78,66 +100,120 @@ const labels: Record<View, string> = {
       Nothing here yet. {view !== 'trash' && <a href="/items/new">Create an item</a>}
     </p>
   ) : (
-    <ul class="item-list">
-      {rows.map((item) => (
-        <li>
-          {thumbs.has(item.id) ? (
-            <img
-              class="thumb"
-              src={`/media/${thumbs.get(item.id)}`}
-              width="48"
-              height="48"
-              alt=""
-            />
-          ) : (
-            <span class="thumb" aria-hidden="true"></span>
-          )}
-          <span class="title">
-            <a href={`/items/${item.id}`}>{item.title}</a>
+    <>
+      {bulk && (
+        <div class="card bulk-bar" data-bulk data-bulk-max={BULK_MAX}>
+          <label class="inline">
+            <input type="checkbox" data-bulk-all />
+            Select all on this page
+          </label>
+          <span class="hint" data-bulk-count>
+            None selected
           </span>
-          {item.kind === 'wishlist' ? (
-            <span class="badge wishlist">Wishlist</span>
-          ) : (
-            <span class={`badge ${item.status}`}>{STATUS_LABEL[item.status]}</span>
-          )}
-          <span class="hint">{shortDateTime(item.updatedAt)}</span>
-          {view === 'trash' ? (
-            <>
-              <button
-                class="small"
-                data-api={`/api/items/${item.id}/trash`}
-                data-body='{"trashed":false}'
-              >
-                Restore
-              </button>
-              <button
-                class="small danger"
-                data-api={`/api/items/${item.id}`}
-                data-method="DELETE"
-                data-confirm={`Delete "${item.title}" permanently, with its photos? This can't be undone here (backups keep a copy for a limited time).`}
-              >
-                Delete permanently
-              </button>
-            </>
-          ) : item.kind === 'owned' && item.status === 'public' ? (
-            <button
-              class="small"
-              data-api={`/api/items/${item.id}/status`}
-              data-body='{"status":"private"}'
-            >
-              Make private
-            </button>
-          ) : item.kind === 'owned' ? (
-            <button
-              class="small primary"
-              data-api={`/api/items/${item.id}/status`}
-              data-body='{"status":"public"}'
-            >
+          <div class="actions">
+            <button type="button" class="small primary" data-bulk-action="publish" disabled>
               Publish
             </button>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+            <label class="visually-hidden" for="bulk-category">
+              Category to add
+            </label>
+            <select id="bulk-category" data-bulk-category disabled>
+              <option value="">Add a category…</option>
+              {tree.map((c) => (
+                <option value={c.id}>{`${'– '.repeat(c.depth)}${c.name}`}</option>
+              ))}
+            </select>
+            <button type="button" class="small" data-bulk-action="add-category" disabled>
+              Add
+            </button>
+            <button type="button" class="small danger" data-bulk-action="trash" disabled>
+              Move to trash
+            </button>
+          </div>
+          <p data-bulk-message role="status"></p>
+        </div>
+      )}
+      <ul class="item-list">
+        {rows.map((item) => (
+          <li>
+            {bulk && (
+              <input
+                type="checkbox"
+                class="bulk-pick"
+                value={item.id}
+                data-bulk-pick
+                aria-label={`Select ${item.title}`}
+              />
+            )}
+            {thumbs.has(item.id) ? (
+              <img
+                class="thumb"
+                src={`/media/${thumbs.get(item.id)}`}
+                width="48"
+                height="48"
+                alt=""
+              />
+            ) : (
+              <span class="thumb" aria-hidden="true"></span>
+            )}
+            <span class="title">
+              <a href={`/items/${item.id}`}>{item.title}</a>
+            </span>
+            {item.kind === 'wishlist' ? (
+              <span class="badge wishlist">Wishlist</span>
+            ) : (
+              <span class={`badge ${item.status}`}>{STATUS_LABEL[item.status]}</span>
+            )}
+            <span class="hint">{shortDateTime(item.updatedAt)}</span>
+            {view === 'trash' ? (
+              <>
+                <button
+                  class="small"
+                  data-api={`/api/items/${item.id}/trash`}
+                  data-body='{"trashed":false}'
+                >
+                  Restore
+                </button>
+                <button
+                  class="small danger"
+                  data-api={`/api/items/${item.id}`}
+                  data-method="DELETE"
+                  data-confirm={`Delete "${item.title}" permanently, with its photos? This can't be undone here (backups keep a copy for a limited time).`}
+                >
+                  Delete permanently
+                </button>
+              </>
+            ) : item.kind === 'owned' && item.status === 'public' ? (
+              <button
+                class="small"
+                data-api={`/api/items/${item.id}/status`}
+                data-body='{"status":"private"}'
+              >
+                Make private
+              </button>
+            ) : item.kind === 'owned' ? (
+              <button
+                class="small primary"
+                data-api={`/api/items/${item.id}/status`}
+                data-body='{"status":"public"}'
+              >
+                Publish
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </>
+  )}
+  {(page > 1 || hasNext) && (
+    <nav class="filters" aria-label="Pages">
+      {page > 1 && <a href={pageLink(page - 1)}>← Previous</a>}
+      <span class="hint">Page {page}</span>
+      {hasNext && <a href={pageLink(page + 1)}>Next →</a>}
+    </nav>
   )}
 </Admin>
+
+<script>
+  import '../../scripts/bulk.ts';
+</script>
