@@ -14,16 +14,16 @@
     "db:migrate:staging": "wrangler d1 migrations apply DB --remote --config wrangler.jsonc --env staging"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "14.4.8",
+    "@astrojs/cloudflare": "14.4.9",
     "@cg/core": "*",
     "@jsquash/webp": "1.5.0",
-    "astro": "7.4.12",
+    "astro": "7.4.13",
     "mediabunny": "1.66.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
     "typescript": "6.0.3",
-    "wrangler": "4.162.0"
+    "wrangler": "4.166.0"
   }
 }
