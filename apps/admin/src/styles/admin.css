@@ -915,3 +915,37 @@ a.button-link:hover {
   height: 1.25rem;
   accent-color: var(--accent);
 }
+
+/* Spreadsheet export and import (M2 step 6, IMP-06). */
+.sheet-report {
+  padding-left: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.sheet-report > li {
+  margin: 0.6rem 0;
+}
+
+.sheet-report p {
+  margin: 0;
+}
+
+.sheet-report ul {
+  margin: 0.2rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.sheet-changes {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.sheet-problem > ul:not(.sheet-changes) {
+  color: var(--danger);
+}
+
+[data-sheet-message].error,
+[data-sheet-totals].error,
+[data-sheet-progress].error {
+  color: var(--danger);
+}

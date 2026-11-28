@@ -1,0 +1,94 @@
+---
+/**
+ * Spreadsheet export and import (IMP-06, D-71). Download every item as CSV
+ * or JSON, edit it in a spreadsheet, then load it back: a preview shows
+ * exactly what would change before anything is saved.
+ */
+import { env } from 'cloudflare:workers';
+import { countSheetItems } from '@cg/core/admin';
+import Admin from '../../layouts/Admin.astro';
+
+const count = await countSheetItems(env.DB);
+---
+
+<Admin title="Spreadsheet · Admin">
+  <h1>Spreadsheet</h1>
+  <p class="hint">
+    Edit many items at once in a spreadsheet: download, change the cells, then load the file back.
+    Items in the trash are left out and never changed.
+  </p>
+
+  <section class="card" aria-labelledby="sheet-download-h">
+    <h2 id="sheet-download-h">1. Download</h2>
+    <p>
+      {count} item{count === 1 ? '' : 's'}, with every field, including the private ones (price,
+      purchase date, the original caption). Keep the file somewhere safe.
+    </p>
+    <div class="actions">
+      <a class="button-link" href="/api/items/sheet?format=csv" download>
+        Download CSV
+      </a>
+      <a class="button-link" href="/api/items/sheet?format=json" download>
+        Download JSON
+      </a>
+    </div>
+    <p class="hint">
+      CSV opens in Excel, Numbers or Google Sheets. A cell that starts with = + - or @ gets a ' in
+      front so a spreadsheet never runs it as a formula; it is removed again when you load the file.
+    </p>
+  </section>
+
+  <section class="card sheet" data-sheet aria-labelledby="sheet-upload-h">
+    <h2 id="sheet-upload-h">2. Load your changes</h2>
+    <ul class="hint">
+      <li>
+        Rows are matched by <code>id</code>, or by <code>slug</code> when there is no id. A row with
+        neither (or a new slug) becomes a new draft, and needs a title.
+      </li>
+      <li>
+        Only the columns in your file are changed. You can delete the columns you don't need. An
+        empty cell clears that field.
+      </li>
+      <li>
+        Categories are written as their path, like <code>meteorites/pallasites</code>, separated by{' '}
+        <code>;</code>. They must already exist. Tags are separated by <code>;</code> and are
+        created as needed.
+      </li>
+      <li>
+        <code>import_key</code>, <code>created_at</code> and <code>updated_at</code> are for
+        reference only.
+      </li>
+    </ul>
+    <label for="sheet-file">The edited file (.csv or .json)</label>
+    <input
+      id="sheet-file"
+      type="file"
+      accept=".csv,text/csv,.json,application/json"
+      data-sheet-file
+    />
+    <div class="actions">
+      <button type="button" data-sheet-preview>
+        Preview the changes
+      </button>
+    </div>
+    <p data-sheet-message role="status"></p>
+  </section>
+
+  <section class="card" data-sheet-result hidden aria-labelledby="sheet-result-h">
+    <h2 id="sheet-result-h" data-sheet-result-heading>
+      3. What will change
+    </h2>
+    <p data-sheet-totals></p>
+    <div class="actions">
+      <button type="button" class="primary" data-sheet-apply hidden>
+        Apply these changes
+      </button>
+    </div>
+    <p data-sheet-progress role="status" aria-live="polite"></p>
+    <ol class="sheet-report" data-sheet-report></ol>
+  </section>
+</Admin>
+
+<script>
+  import '../../scripts/sheet.ts';
+</script>

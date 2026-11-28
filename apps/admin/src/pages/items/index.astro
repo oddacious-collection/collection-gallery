@@ -90,6 +90,11 @@ const labels: Record<View, string> = {
       <a href="/review">Review them one at a time</a>.
     </p>
   )}
+  {view !== 'trash' && (
+    <p class="hint">
+      <a href="/items/sheet">Download or edit everything as a spreadsheet</a> (CSV or JSON).
+    </p>
+  )}
   {view === 'trash' && (
     <p class="hint">
       Items in the trash are hidden everywhere. They're deleted for good after 30 days.

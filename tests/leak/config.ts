@@ -51,6 +51,10 @@ export function phaseChecks(
         label: `sentinel private file ${k}`,
         path: `/media/0sentkey0000000000000000${k}`,
       })),
+      // The admin-only spreadsheet export (IMP-06) must not exist on the public host.
+      { label: 'spreadsheet export (CSV)', path: '/api/items/sheet?format=csv' },
+      { label: 'spreadsheet export (JSON)', path: '/api/items/sheet?format=json' },
+      { label: 'spreadsheet page', path: '/items/sheet' },
     ],
     must200: [
       '/item/leak-test-public-item',
