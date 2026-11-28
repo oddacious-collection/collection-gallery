@@ -13,13 +13,13 @@
     "deploy:staging": "node ../../scripts/deploy-staging.ts public"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "14.4.8",
+    "@astrojs/cloudflare": "14.4.9",
     "@cg/core": "*",
-    "astro": "7.4.12"
+    "astro": "7.4.13"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
     "typescript": "6.0.3",
-    "wrangler": "4.162.0"
+    "wrangler": "4.166.0"
   }
 }
