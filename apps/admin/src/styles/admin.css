@@ -756,3 +756,44 @@ p.warning {
   padding: 0.5rem;
   overflow-x: auto;
 }
+
+/* Instagram import (M2, D-70). */
+.import input[type='number'] {
+  width: 8rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+}
+
+[data-import-progress] {
+  width: 100%;
+  margin-top: 1rem;
+  accent-color: var(--accent);
+}
+
+.import-report {
+  padding-left: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.import-report li {
+  margin: 0.2rem 0;
+}
+
+.import-report .import-failed {
+  color: var(--danger);
+}
+
+.import-report .import-skipped,
+.import-report .import-trashed,
+.import-report .import-done {
+  color: var(--muted);
+}
+
+[data-import-message].error,
+[data-import-now].error {
+  color: var(--danger);
+}
